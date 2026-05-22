@@ -1,0 +1,23 @@
+commands:
+    peek:
+        description: 偷窥已连接客户端的电脑屏幕。
+        usage: |-
+            peek [name] [-d display] [-b blur] [--list]
+        examples: |-
+            peek
+            peek dingyi
+            peek dingyi -d 1
+            peek dingyi -b 80
+            peek --list
+        options:
+            display: 指定客户端的显示器编号。
+            blur: 临时调整模糊半径，不能低于配置中的 minBlur。
+            list: 列出当前在线的客户端。
+        messages:
+            no-clients: 当前没有任何客户端在线。
+            multiple-clients: 当前有多个客户端在线，请指定名称：{0}
+            client-offline: 客户端「{0}」未在线。
+            timeout: 客户端「{0}」响应超时。
+            image-too-large: 截图体积超过限制。
+            failed: 截图失败：{0}
+            list-header: 当前在线客户端 ({0})：

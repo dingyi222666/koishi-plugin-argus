@@ -1,0 +1,81 @@
+{
+    "name": "koishi-plugin-argus",
+    "description": "百眼巨人 Argus：让群友通过 /peek 命令偷窥你电脑屏幕的 Koishi 插件。",
+    "version": "0.1.0",
+    "main": "lib/index.cjs",
+    "module": "lib/index.mjs",
+    "typings": "lib/index.d.ts",
+    "types": "lib/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./lib/index.d.ts",
+            "import": "./lib/index.mjs",
+            "require": "./lib/index.cjs"
+        },
+        "./package.json": "./package.json"
+    },
+    "type": "module",
+    "files": [
+        "lib",
+        "dist"
+    ],
+    "license": "MIT",
+    "keywords": [
+        "chatbot",
+        "koishi",
+        "plugin",
+        "argus",
+        "peek",
+        "screenshot",
+        "remote"
+    ],
+    "peerDependencies": {
+        "@koishijs/plugin-server": "^3.2.7",
+        "koishi": "^4.18.9"
+    },
+    "dependencies": {
+        "@jimp/core": "^1.6.0",
+        "jimp": "^1.6.0"
+    },
+    "devDependencies": {
+        "@types/ws": "^8.5.10",
+        "@typescript-eslint/eslint-plugin": "^7.18.1-alpha.3",
+        "@typescript-eslint/parser": "^8.45.1-alpha.0",
+        "esbuild": "^0.25.10",
+        "esbuild-register": "npm:@shigma/esbuild-register@^1.1.1",
+        "eslint": "^8.57.1",
+        "eslint-config-prettier": "^9.1.2",
+        "eslint-config-standard": "^17.1.0",
+        "eslint-plugin-import": "^2.32.0",
+        "eslint-plugin-n": "^16.6.2",
+        "eslint-plugin-prettier": "^5.5.4",
+        "eslint-plugin-promise": "^7.2.1",
+        "ws": "^8.18.0",
+        "yakumo": "^1.0.0",
+        "yakumo-esbuild": "^1.0.0",
+        "yakumo-mocha": "^1.0.0",
+        "yakumo-tsc": "^1.0.0"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    },
+    "scripts": {
+        "build": "yarn yakumo build",
+        "bump": "yarn yakumo version",
+        "dep": "yarn yakumo upgrade",
+        "pub": "yarn yakumo publish",
+        "lint": "yarn eslint src --ext=ts",
+        "lint-fix": "yarn eslint src --ext=ts --fix"
+    },
+    "koishi": {
+        "description": {
+            "zh": "百眼巨人 Argus：通过 /peek 命令让群友偷窥你的电脑屏幕。"
+        },
+        "service": {
+            "required": [
+                "server"
+            ]
+        }
+    },
+    "author": "dingyi222666 <dingyi222666@foxmail.com>"
+}
