@@ -3,6 +3,7 @@ import type { ArgusServer } from './server'
 import type { Config } from '.'
 import { blurImage } from './blur'
 import { PeekCache, formatRemaining } from './cache'
+import { decryptBuffer } from './crypto'
 
 interface CommandOptions {
     display?: number
@@ -92,7 +93,19 @@ export function applyCommands(
                     return formatBusy(session, client.name, response.frame)
                 }
 
-                const buffer = Buffer.from(response.frame.image, 'base64')
+                let buffer: Buffer
+                try {
+                    buffer = decodeImagePayload(response.frame, config.token)
+                } catch (err) {
+                    const message =
+                        err instanceof Error ? err.message : String(err)
+                    ctx.logger.warn(
+                        'argus decrypt failed for %s: %s',
+                        client.name,
+                        message
+                    )
+                    return session.text('.failed', ['decrypt_failed'])
+                }
                 const output = await blurImage(buffer, {
                     radius,
                     mode: config.blurMode
@@ -246,4 +259,17 @@ function range(start: number, end: number) {
     const out: number[] = []
     for (let i = start; i < end; i++) out.push(i)
     return out
+}
+
+function decodeImagePayload(
+    frame: { image: string; enc?: 'aes-256-gcm' | 'none' },
+    token: string
+): Buffer {
+    if (!frame.enc || frame.enc === 'none') {
+        return Buffer.from(frame.image, 'base64')
+    }
+    if (frame.enc === 'aes-256-gcm') {
+        return decryptBuffer(frame.image, token)
+    }
+    throw new Error(`unsupported_enc:${frame.enc}`)
 }

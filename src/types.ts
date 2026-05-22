@@ -37,8 +37,14 @@ export interface PeekRequestFrame {
 export interface PeekResultFrame {
     type: 'peek_result'
     id: string
-    /** PNG/JPEG base64（不带 data: 前缀）。*/
+    /**
+     * 图片 buffer，base64 编码。
+     * `enc` 为 `aes-256-gcm` 时为 base64(iv|tag|ciphertext)，token 派生 key 解密。
+     * `enc` 缺省 / 为 `none` 时为图片原始字节的 base64（向后兼容旧 CLI）。
+     */
     image: string
+    /** 加密算法。新版客户端始终发 `aes-256-gcm`。 */
+    enc?: 'aes-256-gcm' | 'none'
     mime?: string
     width?: number
     height?: number

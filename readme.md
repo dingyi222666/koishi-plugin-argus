@@ -5,6 +5,14 @@
 插件本体作为 WebSocket 服务，配套 CLI 客户端 [`argus-eye`](https://www.npmjs.com/package/argus-eye)
 连接上来后，群里就能通过命令拉取实时模糊截图。
 
+## 安全说明
+
+- 客户端连接时必须带 `token`，错的直接踢。
+- 截图 buffer 在 CLI 端用 `AES-256-GCM` 加密后才上 WebSocket，
+  key 由 token 通过 scrypt 派生，IV 每帧随机。换句话说**抓包只能拿到密文**，
+  插件这边解出来再做模糊处理。token 写错或者被改包都会被 GCM 校验拒绝。
+- 默认 `authority: 1`，可调高到只允许特定群友 peek。
+
 ## 安装
 
 ```bash
