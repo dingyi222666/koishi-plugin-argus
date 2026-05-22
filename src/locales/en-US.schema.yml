@@ -1,0 +1,16 @@
+$desc: Argus configuration
+$inner:
+    path: WebSocket mount path; must start with /.
+    token: Auth token for clients; if empty all connections are rejected.
+    commandName: Top-level command name (e.g. peek, spy, look).
+    blur: Default blur radius; larger means blurrier (0 disables blur).
+    blurMode:
+        $desc: Blur algorithm
+        $inner:
+            - Gaussian blur (better quality, slower)
+            - Fast blur (jimp.blur, faster)
+    minBlur: Lower bound for the temporary -b override, to prevent unblurred captures.
+    maxImageBytes: Max screenshot size in bytes.
+    timeout: Timeout (ms) waiting for a client response.
+    registerAlias: Whether to register each connected client's name as a command alias.
+    authority: Minimum authority level required to run the command.

@@ -32,6 +32,11 @@ export const Config: Schema<Config> = Schema.object({
     timeout: Schema.natural().default(15_000),
     registerAlias: Schema.boolean().default(true),
     authority: Schema.natural().default(1)
+}).i18n({
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    'zh-CN': require('./locales/zh-CN.schema.yml'),
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    'en-US': require('./locales/en-US.schema.yml')
 })
 
 declare module 'koishi' {
@@ -43,7 +48,9 @@ declare module 'koishi' {
 
 export function apply(ctx: Context, config: Config) {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    ctx.i18n.define('zh-CN', require('./locales/zh-CN'))
+    ctx.i18n.define('zh-CN', require('./locales/zh-CN.yml'))
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    ctx.i18n.define('en-US', require('./locales/en-US.yml'))
 
     if (!config.token) {
         ctx.logger.warn(

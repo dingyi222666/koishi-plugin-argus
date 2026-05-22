@@ -1,0 +1,23 @@
+commands:
+    peek:
+        description: Peek at a connected client's screen.
+        usage: |-
+            peek [name] [-d display] [-b blur] [--list]
+        examples: |-
+            peek
+            peek dingyi
+            peek dingyi -d 1
+            peek dingyi -b 80
+            peek --list
+        options:
+            display: Display index on the client.
+            blur: Override blur radius (must be >= configured minBlur).
+            list: List currently connected clients.
+        messages:
+            no-clients: No clients are connected.
+            multiple-clients: 'Multiple clients online, please specify: {0}'
+            client-offline: 'Client "{0}" is not connected.'
+            timeout: 'Client "{0}" timed out.'
+            image-too-large: Screenshot size exceeded the limit.
+            failed: 'Capture failed: {0}'
+            list-header: 'Connected clients ({0}):'

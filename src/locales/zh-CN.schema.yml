@@ -1,0 +1,16 @@
+$desc: Argus 配置
+$inner:
+    path: WebSocket 服务挂载路径，必须以 / 开头。
+    token: 客户端鉴权 token；为空时所有连接都会被拒绝。
+    commandName: 主命令名（例如 peek、spy、look）。
+    blur: 默认模糊半径，越大越糊（0 = 不模糊）。
+    blurMode:
+        $desc: 模糊算法
+        $inner:
+            - 高斯模糊（质量好，但慢）
+            - 快速模糊（jimp.blur，速度快）
+    minBlur: 命令里 -b 临时调小模糊时不可低于此值，防止裸奔。
+    maxImageBytes: 单张截图大小上限（字节）。
+    timeout: 等待客户端响应的超时（毫秒）。
+    registerAlias: 是否给每个连进来的客户端自动注册同名命令作为别名。
+    authority: 命令所需的最低权限等级。
