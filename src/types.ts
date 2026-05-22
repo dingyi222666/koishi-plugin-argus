@@ -52,6 +52,21 @@ export interface PeekErrorFrame {
     error: string
 }
 
+/**
+ * Client → Server: 客户端拒绝截图（例如正在全屏游戏 / 全屏应用）。
+ * Plugin 收到此帧时不再返回截图，而是返回一段文字提示。
+ */
+export interface PeekBusyFrame {
+    type: 'peek_busy'
+    id: string
+    /** 当前活动应用程序名（如 "League of Legends" / "explorer.exe"） */
+    app?: string
+    /** 窗口标题 */
+    title?: string
+    /** 自定义原因（默认 fullscreen） */
+    reason?: 'fullscreen' | string
+}
+
 /** 双向心跳 */
 export interface PingFrame {
     type: 'ping'
@@ -73,6 +88,7 @@ export type ClientFrame =
     | HelloFrame
     | PeekResultFrame
     | PeekErrorFrame
+    | PeekBusyFrame
     | PingFrame
     | PongFrame
     | ByeFrame

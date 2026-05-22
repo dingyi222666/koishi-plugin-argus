@@ -2,17 +2,20 @@ import { Context, h } from 'koishi'
 import type { ArgusServer } from './server'
 import type { Config } from '.'
 import { blurImage } from './blur'
+import { PeekCache, formatRemaining } from './cache'
 
 interface CommandOptions {
     display?: number
     blur?: number
     list?: boolean
+    force?: boolean
 }
 
 export function applyCommands(
     ctx: Context,
     server: ArgusServer,
-    config: Config
+    config: Config,
+    cache: PeekCache
 ) {
     const cmd = ctx
         .command(
@@ -22,6 +25,7 @@ export function applyCommands(
         .option('display', '-d <id:number>')
         .option('blur', '-b <radius:number>')
         .option('list', '-l, --list')
+        .option('force', '-f, --force', { authority: config.forceAuthority })
         .action(async ({ session, options }, name) => {
             if (!session) return
             const opts = options as CommandOptions
@@ -57,15 +61,48 @@ export function applyCommands(
                 200
             )
 
+            const cacheKey = PeekCache.key(client.name, opts.display)
+            const cached = !opts.force ? cache.get(cacheKey) : undefined
+            // -b 与 cache 的关系：缓存的图已经按当时的 radius 模糊过，
+            // 临时调整 -b 时强制绕过缓存重新出图。
+            const cacheUsable =
+                cached &&
+                (opts.blur === undefined ||
+                    opts.blur === config.blur)
+
+            if (cacheUsable && cached) {
+                if (cached.busy) {
+                    return formatBusy(session, client.name, cached.busy, cached)
+                }
+                if (cached.image) {
+                    return [
+                        h.image(cached.image, 'image/png'),
+                        formatCacheNote(session, cached)
+                    ]
+                }
+            }
+
             try {
-                const result = await server.peek(client.name, {
+                const response = await server.peek(client.name, {
                     display: opts.display
                 })
-                const buffer = Buffer.from(result.image, 'base64')
+
+                if (response.kind === 'busy') {
+                    cache.set(cacheKey, { busy: response.frame })
+                    return formatBusy(session, client.name, response.frame)
+                }
+
+                const buffer = Buffer.from(response.frame.image, 'base64')
                 const output = await blurImage(buffer, {
                     radius,
                     mode: config.blurMode
                 })
+
+                // 只有用配置默认 radius 时才入缓存，避免污染
+                if (opts.blur === undefined || opts.blur === config.blur) {
+                    cache.set(cacheKey, { image: output })
+                }
+
                 return h.image(output, 'image/png')
             } catch (err) {
                 const message = err instanceof Error ? err.message : String(err)
@@ -98,12 +135,10 @@ export function applyCommands(
             if (ctx.$commander.get(name)) return
 
             const sub = ctx
-                .command(
-                    `${name}`,
-                    { authority: config.authority }
-                )
+                .command(`${name}`, { authority: config.authority })
                 .option('display', '-d <id:number>')
                 .option('blur', '-b <radius:number>')
+                .option('force', '-f, --force', { authority: config.forceAuthority })
                 .action(async ({ session, options }) => {
                     if (!session) return
                     const opts = options as CommandOptions
@@ -114,6 +149,7 @@ export function applyCommands(
                     if (opts.blur !== undefined) {
                         parts.push('-b', String(opts.blur))
                     }
+                    if (opts.force) parts.push('-f')
                     return await session.execute(parts.join(' '))
                 })
 
@@ -131,7 +167,13 @@ export function applyCommands(
         for (const client of server.listClients()) register(client.name)
 
         ctx.on('argus/client-connect', register)
-        ctx.on('argus/client-disconnect', unregister)
+        ctx.on('argus/client-disconnect', (name) => {
+            unregister(name)
+            // 客户端下线，相关缓存全部清掉
+            for (const display of [undefined, ...range(0, 16)]) {
+                cache.delete(PeekCache.key(name, display))
+            }
+        })
 
         ctx.on('dispose', () => {
             for (const dispose of disposers.values()) dispose()
@@ -165,10 +207,43 @@ function formatClientList(
     return session.text('.list-header', [clients.length]) + '\n' + lines.join('\n')
 }
 
+function formatBusy(
+    session: {
+        text: (key: string, args?: unknown[]) => string
+    },
+    clientName: string,
+    busy: { app?: string; title?: string; reason?: string },
+    cached?: { expiresAt: number }
+) {
+    const app = busy.app || busy.title || 'unknown app'
+    const note = cached
+        ? ' ' +
+          session.text('.cache-note', [
+              formatRemaining(cached.expiresAt - Date.now())
+          ])
+        : ''
+    return session.text('.busy', [clientName, app]) + note
+}
+
+function formatCacheNote(
+    session: { text: (key: string, args?: unknown[]) => string },
+    cached: { expiresAt: number }
+) {
+    return session.text('.cache-note', [
+        formatRemaining(cached.expiresAt - Date.now())
+    ])
+}
+
 function clamp(v: number, min: number, max: number) {
     return Math.max(min, Math.min(max, v))
 }
 
 function isSafeAlias(name: string) {
     return /^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(name)
+}
+
+function range(start: number, end: number) {
+    const out: number[] = []
+    for (let i = start; i < end; i++) out.push(i)
+    return out
 }

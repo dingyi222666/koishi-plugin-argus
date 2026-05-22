@@ -12,5 +12,7 @@ $inner:
     minBlur: 命令里 -b 临时调小模糊时不可低于此值，防止裸奔。
     maxImageBytes: 单张截图大小上限（字节）。
     timeout: 等待客户端响应的超时（毫秒）。
+    cacheDuration: 截图缓存时长（毫秒）。在此期间内同一客户端 + 显示器的反复调用会直接返回缓存的图。设为 0 关闭缓存。默认 5 分钟。
     registerAlias: 是否给每个连进来的客户端自动注册同名命令作为别名。
     authority: 命令所需的最低权限等级。
+    forceAuthority: 使用 -f / --force 绕过缓存所需的最低权限等级。

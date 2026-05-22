@@ -4,6 +4,7 @@ import type { WebSocket } from 'ws'
 import type {
     ClientFrame,
     DisplayInfo,
+    PeekBusyFrame,
     PeekRequestFrame,
     PeekResultFrame,
     ServerFrame
@@ -23,10 +24,15 @@ export interface ClientChangeEvent {
 }
 
 export interface PendingPeek {
-    resolve: (frame: PeekResultFrame) => void
+    resolve: (response: PeekResponse) => void
     reject: (error: Error) => void
     timer: NodeJS.Timeout
 }
+
+/** peek 调用的统一返回值。要么是图，要么是“客户端忙”。 */
+export type PeekResponse =
+    | { kind: 'image'; frame: PeekResultFrame }
+    | { kind: 'busy'; frame: PeekBusyFrame }
 
 export interface ArgusClient {
     name: string
@@ -64,12 +70,12 @@ export class ArgusServer {
     }
 
     /**
-     * 派发一次截图请求并等待结果。
+     * 派发一次截图请求并等待结果。可能返回图片或“客户端忙”。
      */
     async peek(
         name: string,
         options: { display?: number } = {}
-    ): Promise<PeekResultFrame> {
+    ): Promise<PeekResponse> {
         const client = this.clients.get(name)
         if (!client) throw new Error(`client_offline:${name}`)
 
@@ -80,7 +86,7 @@ export class ArgusServer {
             display: options.display
         }
 
-        return await new Promise<PeekResultFrame>((resolve, reject) => {
+        return await new Promise<PeekResponse>((resolve, reject) => {
             const timer = setTimeout(() => {
                 client.pending.delete(id)
                 reject(new Error('timeout'))
@@ -248,7 +254,15 @@ export class ArgusServer {
                     pending.reject(new Error('image_too_large'))
                     return
                 }
-                pending.resolve(frame)
+                pending.resolve({ kind: 'image', frame })
+                return
+            }
+            case 'peek_busy': {
+                const pending = client.pending.get(frame.id)
+                if (!pending) return
+                clearTimeout(pending.timer)
+                client.pending.delete(frame.id)
+                pending.resolve({ kind: 'busy', frame })
                 return
             }
             case 'peek_error': {

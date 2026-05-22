@@ -12,5 +12,7 @@ $inner:
     minBlur: Lower bound for the temporary -b override, to prevent unblurred captures.
     maxImageBytes: Max screenshot size in bytes.
     timeout: Timeout (ms) waiting for a client response.
+    cacheDuration: Screenshot cache duration in ms. Repeated calls within this window for the same client+display reuse the cached image. Set to 0 to disable. Default 5 minutes.
     registerAlias: Whether to register each connected client's name as a command alias.
     authority: Minimum authority level required to run the command.
+    forceAuthority: Minimum authority level required to use -f / --force to bypass the cache.

@@ -42,9 +42,15 @@ npx argus-eye -s ws://your-koishi-host:5140/argus -t a-strong-secret -n dingyi
 /peek dingyi          # 指定客户端
 /peek dingyi -d 1     # 指定客户端的某块显示器
 /peek dingyi -b 80    # 临时加大模糊（不能低于 minBlur）
+/peek dingyi -f       # 强制重新截图，绕过 5 分钟缓存（需要 forceAuthority）
 /peek --list          # 查看在线客户端
 /dingyi               # registerAlias=true 时的别名（等价于 /peek dingyi）
 ```
+
+群友连按 `/peek` 时不会让你电脑反复截图：默认 5 分钟内的同一客户端 + 同一显示器，
+插件会复用上一次的图（消息后面带 `(缓存，剩余 4m12s)` 之类的提示）。
+如果当时正在玩全屏游戏 / 全屏视频，CLI 会直接返回程序名，群里只会看到一行
+「客户端「dingyi」正忙：League of Legends」，不会真的把画面发出去。
 
 ## 配置项
 
@@ -58,5 +64,7 @@ npx argus-eye -s ws://your-koishi-host:5140/argus -t a-strong-secret -n dingyi
 | `minBlur` | `number` | `10` | 命令里调小模糊时不可低于此值 |
 | `maxImageBytes` | `number` | `8 * 1024 * 1024` | 单张截图大小上限 |
 | `timeout` | `number` | `15000` | 等待客户端响应超时（ms）|
+| `cacheDuration` | `number` | `300000` | 截图缓存时长（ms），默认 5 分钟，0 = 关闭缓存 |
 | `registerAlias` | `boolean` | `true` | 是否给每个客户端注册同名别名 |
 | `authority` | `number` | `1` | 命令所需权限等级 |
+| `forceAuthority` | `number` | `3` | 使用 `-f` 绕过缓存所需权限等级 |
