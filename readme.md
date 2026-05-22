@@ -70,7 +70,8 @@ npx argus-eye -s ws://your-koishi-host:5140/argus -t a-strong-secret -n dingyi
 | `blur` | `number` | `40` | 默认模糊半径（pixel）|
 | `blurMode` | `'gaussian' \| 'fast'` | `'fast'` | 模糊算法 |
 | `minBlur` | `number` | `10` | 命令里调小模糊时不可低于此值 |
-| `maxImageBytes` | `number` | `8 * 1024 * 1024` | 单张截图大小上限 |
+| `maxImageKB` | `number` | `8192` | 单张截图大小上限（KB） |
+| `finalMaxKB` | `number` | `200` | 发到群里的最终图片体积上限（KB），插件会做二次压缩；0 = 关闭 |
 | `timeout` | `number` | `15000` | 等待客户端响应超时（ms）|
 | `cacheDuration` | `number` | `300000` | 截图缓存时长（ms），默认 5 分钟，0 = 关闭缓存 |
 | `registerAlias` | `boolean` | `true` | 是否给每个客户端注册同名别名 |

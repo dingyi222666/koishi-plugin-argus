@@ -16,7 +16,8 @@ export interface Config {
     blur: number
     blurMode: BlurMode
     minBlur: number
-    maxImageBytes: number
+    maxImageKB: number
+    finalMaxKB: number
     timeout: number
     cacheDuration: number
     registerAlias: boolean
@@ -31,7 +32,8 @@ export const Config: Schema<Config> = Schema.object({
     blur: Schema.natural().min(0).max(200).default(40),
     blurMode: Schema.union(['gaussian', 'fast'] as const).default('fast'),
     minBlur: Schema.natural().min(0).max(200).default(10),
-    maxImageBytes: Schema.natural().default(8 * 1024 * 1024),
+    maxImageKB: Schema.natural().default(8 * 1024),
+    finalMaxKB: Schema.natural().default(200),
     timeout: Schema.natural().default(15_000),
     cacheDuration: Schema.natural().default(5 * 60 * 1000),
     registerAlias: Schema.boolean().default(true),
@@ -69,7 +71,7 @@ export function apply(ctx: Context, config: Config) {
         path: config.path,
         token: config.token,
         timeout: config.timeout,
-        maxImageBytes: config.maxImageBytes,
+        maxImageBytes: config.maxImageKB * 1024,
         onClientChange: (event) => {
             if (event.type === 'connect') {
                 ctx.emit('argus/client-connect', event.name)

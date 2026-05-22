@@ -2,6 +2,7 @@ import { Context, h } from 'koishi'
 import type { ArgusServer } from './server'
 import type { Config } from '.'
 import { blurImage } from './blur'
+import { compressToBudget } from './compress'
 import { PeekCache, formatRemaining } from './cache'
 import { decryptBuffer } from './crypto'
 
@@ -77,7 +78,7 @@ export function applyCommands(
                 }
                 if (cached.image) {
                     return [
-                        h.image(cached.image, 'image/png'),
+                        h.image(cached.image, cached.mime ?? 'image/png'),
                         formatCacheNote(session, cached)
                     ]
                 }
@@ -106,17 +107,38 @@ export function applyCommands(
                     )
                     return session.text('.failed', ['decrypt_failed'])
                 }
-                const output = await blurImage(buffer, {
+                const blurStart = Date.now()
+                const blurred = blurImage(buffer, {
                     radius,
                     mode: config.blurMode
                 })
+                const blurMs = Date.now() - blurStart
+
+                // 第二轮压缩：群里发图，体积越小越好。
+                // blur 总是输出 JPEG，所以 mime 总是 image/jpeg。
+                const finalBudget = config.finalMaxKB * 1024
+                const compressStart = Date.now()
+                const output =
+                    finalBudget > 0 && blurred.length > finalBudget
+                        ? compressToBudget(blurred, { targetBytes: finalBudget })
+                        : blurred
+                const compressMs = Date.now() - compressStart
+                const mime = 'image/jpeg'
+
+                ctx.logger.debug(
+                    'peek pipeline: blur=%dms compress=%dms %dKB→%dKB',
+                    blurMs,
+                    compressMs,
+                    Math.round(blurred.length / 1024),
+                    Math.round(output.length / 1024)
+                )
 
                 // 只有用配置默认 radius 时才入缓存，避免污染
                 if (opts.blur === undefined || opts.blur === config.blur) {
-                    cache.set(cacheKey, { image: output })
+                    cache.set(cacheKey, { image: output, mime })
                 }
 
-                return h.image(output, 'image/png')
+                return h.image(output, mime)
             } catch (err) {
                 const message = err instanceof Error ? err.message : String(err)
                 ctx.logger.warn(

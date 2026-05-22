@@ -10,7 +10,8 @@ $inner:
             - Gaussian blur (better quality, slower)
             - Fast blur (jimp.blur, faster)
     minBlur: Lower bound for the temporary -b override, to prevent unblurred captures.
-    maxImageBytes: Max screenshot size in bytes.
+    maxImageKB: Max screenshot size (client -> plugin, encrypted base64) in KB. Larger payloads are rejected. Default 8192 (8MB).
+    finalMaxKB: Final image size budget after blur (KB). The plugin recompresses to JPEG within this budget before sending to chat. Default 200. Set 0 to disable.
     timeout: Timeout (ms) waiting for a client response.
     cacheDuration: Screenshot cache duration in ms. Repeated calls within this window for the same client+display reuse the cached image. Set to 0 to disable. Default 5 minutes.
     registerAlias: Whether to register each connected client's name as a command alias.

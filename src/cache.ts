@@ -7,8 +7,10 @@ import type { PeekBusyFrame } from './types'
 export interface CachedPeek {
     cachedAt: number
     expiresAt: number
-    /** 已经过模糊处理的最终 PNG buffer，busy 时为空。 */
+    /** 已经过模糊处理的最终 buffer，busy 时为空。 */
     image?: Buffer
+    /** 缓存图片的 mime（'image/png' | 'image/jpeg'）。 */
+    mime?: string
     /** busy 状态：客户端在玩游戏 / 全屏。 */
     busy?: PeekBusyFrame
 }
