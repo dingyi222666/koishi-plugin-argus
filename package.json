@@ -1,7 +1,7 @@
 {
     "name": "koishi-plugin-argus",
     "description": "百眼巨人 Argus：让群友通过 /peek 命令偷窥你电脑屏幕的 Koishi 插件。",
-    "version": "0.4.0",
+    "version": "0.4.1",
     "main": "lib/index.cjs",
     "module": "lib/index.mjs",
     "typings": "lib/index.d.ts",

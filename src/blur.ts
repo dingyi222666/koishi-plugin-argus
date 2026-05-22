@@ -1,6 +1,6 @@
 import {
     PhotonImage,
-    box_blur,
+    gaussian_blur,
     resize,
     SamplingFilter
 } from '@cf-wasm/photon/node'
@@ -10,22 +10,21 @@ export type BlurMode = 'gaussian' | 'fast'
 export interface BlurOptions {
     /** 模糊半径，越大越糊。0 = 不模糊。 */
     radius: number
-    /** 兼容旧字段；photon 实现里 'gaussian' 会多过一次 box_blur。 */
+    /** 兼容旧字段；当前实现都按 gaussian 处理。 */
     mode?: BlurMode
 }
 
 /**
- * 模糊算法（photon WASM 实现）：
+ * 真高斯模糊（photon WASM 实现）。
  *
- * 把图缩到 1/N 尺寸（N 由 radius 决定），不做 upsample 直接编 JPEG。
- * 缩小本身就是强力模糊（细节都被平均掉了），同时 JPEG 编码体积小、耗时短，
- * 整体在 100ms 量级完成。聊天客户端展示时会自动放大，看起来就是糊图。
+ * 流程：
+ *   1. 把图缩到一半尺寸，减少模糊本身的计算量
+ *   2. 对缩小图做 gaussian_blur(半径按 radius 派生)
+ *   3. 放大回原尺寸（Triangle 让放大过程平滑，模糊就不会因放大变锯齿）
+ *   4. 编码 JPEG q=80
  *
- * - radius 0      → 直接编 JPEG（不模糊）
- * - radius 1..50  → factor = round(radius / 4) + 2 ≈ 2-15 倍下采样
- * - radius 51..200 → factor = round(radius / 6) + 4 ≈ 12-37 倍下采样
- *
- * `mode='gaussian'` 时多过一次 box_blur 让边缘柔和。
+ * 这种"先缩半 → 真高斯 → 拉回"的方式能在 ~500ms 内做出真正高斯模糊，
+ * 而不是简单的马赛克 / 像素化。
  */
 export function blurImage(input: Buffer, options: BlurOptions): Buffer {
     const radius = clamp(Math.round(options.radius), 0, 200)
@@ -35,22 +34,25 @@ export function blurImage(input: Buffer, options: BlurOptions): Buffer {
             return Buffer.from(img.get_bytes_jpeg(85))
         }
 
-        const factor =
-            radius <= 50
-                ? Math.round(radius / 4) + 2
-                : Math.round(radius / 6) + 4
-
         const w = img.get_width()
         const h = img.get_height()
-        const sw = Math.max(2, Math.round(w / factor))
-        const sh = Math.max(2, Math.round(h / factor))
+        const halfW = Math.max(2, Math.round(w / 2))
+        const halfH = Math.max(2, Math.round(h / 2))
 
-        const small = resize(img, sw, sh, SamplingFilter.Triangle)
+        // 缩半后用一半的半径做高斯，等效于原图上 2 倍的模糊范围
+        const halfRadius = Math.max(1, Math.round(radius / 2))
+
+        const half = resize(img, halfW, halfH, SamplingFilter.Triangle)
         try {
-            if (options.mode === 'gaussian') box_blur(small)
-            return Buffer.from(small.get_bytes_jpeg(85))
+            gaussian_blur(half, halfRadius)
+            const back = resize(half, w, h, SamplingFilter.Triangle)
+            try {
+                return Buffer.from(back.get_bytes_jpeg(80))
+            } finally {
+                back.free()
+            }
         } finally {
-            small.free()
+            half.free()
         }
     } finally {
         img.free()
