@@ -77,5 +77,13 @@
             ]
         }
     },
-    "author": "dingyi222666 <dingyi222666@foxmail.com>"
+    "author": "dingyi222666 <dingyi222666@foxmail.com>",
+    "homepage": "https://github.com/dingyi222666/koishi-plugin-argus#readme",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/dingyi222666/koishi-plugin-argus.git"
+    },
+    "bugs": {
+        "url": "https://github.com/dingyi222666/koishi-plugin-argus/issues"
+    }
 }
