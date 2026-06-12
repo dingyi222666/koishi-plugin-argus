@@ -16,7 +16,7 @@ commands:
             list: 列出当前在线的客户端。
             force: 绕过缓存强制重新截图（需要 forceAuthority）。
         messages:
-            no-clients: 当前没有任何客户端在线。
+            no-clients: 当前没有任何客户端在线，可能是未启动或已关机。
             multiple-clients: 当前有多个客户端在线，请指定名称：{0}
             client-offline: 客户端「{0}」未在线。
             timeout: 客户端「{0}」响应超时。

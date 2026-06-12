@@ -16,7 +16,7 @@ commands:
             list: List currently connected clients.
             force: Bypass the cache (requires forceAuthority).
         messages:
-            no-clients: No clients are connected.
+            no-clients: No clients are connected. They may be offline or powered off.
             multiple-clients: 'Multiple clients online, please specify: {0}'
             client-offline: 'Client "{0}" is not connected.'
             timeout: 'Client "{0}" timed out.'
