@@ -4,10 +4,15 @@ import { ArgusServer } from './server'
 import { applyCommands } from './commands'
 import { PeekCache } from './cache'
 import type { BlurMode } from './blur'
+import { ArgusPeekService } from './peek'
+import { applyChatLunaTool } from './chatluna'
 
 export const name = 'argus'
 
-export const inject = ['server']
+export const inject = {
+    required: ['server'],
+    optional: ['chatluna']
+}
 
 export interface Config {
     path: string
@@ -21,6 +26,8 @@ export interface Config {
     timeout: number
     cacheDuration: number
     registerAlias: boolean
+    enableChatLunaTool: boolean
+    chatLunaToolBlur: number
     authority: number
     forceAuthority: number
 }
@@ -37,6 +44,8 @@ export const Config: Schema<Config> = Schema.object({
     timeout: Schema.natural().default(15_000),
     cacheDuration: Schema.natural().default(5 * 60 * 1000),
     registerAlias: Schema.boolean().default(true),
+    enableChatLunaTool: Schema.boolean().default(false),
+    chatLunaToolBlur: Schema.natural().min(0).max(200).default(40),
     authority: Schema.natural().default(1),
     forceAuthority: Schema.natural().default(3)
 }).i18n({
@@ -80,8 +89,15 @@ export function apply(ctx: Context, config: Config) {
             }
         }
     })
+    const peekService = new ArgusPeekService(ctx, server, config, cache)
 
-    applyCommands(ctx, server, config, cache)
+    applyCommands(ctx, peekService, config)
+
+    if (config.enableChatLunaTool) {
+        ctx.inject(['chatluna'], (ctx) =>
+            applyChatLunaTool(ctx, config, peekService)
+        )
+    }
 
     ctx.on('dispose', () => {
         cache.clear()

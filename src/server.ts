@@ -39,7 +39,7 @@ export interface ArgusClient {
     socket: WebSocket
     version?: string
     displays: DisplayInfo[]
-    defaultDisplay?: number
+    defaultDisplay?: number | string
     connectedAt: number
     pending: Map<string, PendingPeek>
     /** 心跳：上次收到任何客户端帧的时间戳。 */
@@ -74,7 +74,7 @@ export class ArgusServer {
      */
     async peek(
         name: string,
-        options: { display?: number } = {}
+        options: { display?: number | string } = {}
     ): Promise<PeekResponse> {
         const client = this.clients.get(name)
         if (!client) throw new Error(`client_offline:${name}`)

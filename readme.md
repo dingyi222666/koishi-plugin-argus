@@ -60,6 +60,26 @@ npx argus-eye -s ws://your-koishi-host:5140/argus -t a-strong-secret -n dingyi
 如果当时正在玩全屏游戏 / 全屏视频，CLI 会直接返回程序名，群里只会看到一行
 「客户端「dingyi」正忙：League of Legends」，不会真的把画面发出去。
 
+## ChatLuna / Character Agent 工具
+
+安装 ChatLuna 后，可显式开启多模态截图工具：
+
+```yaml
+plugins:
+    argus:
+        token: 'a-strong-secret'
+        enableChatLunaTool: true
+        chatLunaToolBlur: 40
+```
+
+插件会注册 `argus_list_screens` 和 `argus_peek_screen`，供 ChatLuna 与
+Character Agent 调用。Agent 会先查询在线客户端及其显示器，只在目标名称确实
+在线时截取对应客户端，不会用其他在线客户端代替。截图工具与 `/peek` 共用
+鉴权、模糊、压缩和缓存管线，并将处理后的 JPEG 作为图片输入交给支持视觉能力
+的模型。Agent 截图始终使用 `chatLunaToolBlur`，不受 `blur` 和
+`minBlur` 影响，也不允许模型在工具调用中更改模糊值。`force` 参数仍需满足
+`forceAuthority`。
+
 ## 配置项
 
 | 字段 | 类型 | 默认 | 说明 |
@@ -73,7 +93,9 @@ npx argus-eye -s ws://your-koishi-host:5140/argus -t a-strong-secret -n dingyi
 | `maxImageKB` | `number` | `8192` | 单张截图大小上限（KB） |
 | `finalMaxKB` | `number` | `200` | 发到群里的最终图片体积上限（KB），插件会做二次压缩；0 = 关闭 |
 | `timeout` | `number` | `15000` | 等待客户端响应超时（ms）|
-| `cacheDuration` | `number` | `300000` | 截图缓存时长（ms），默认 5 分钟，0 = 关闭缓存 |
+| `cacheDuration` | `number` | `300000` | 截图缓存时长（ms），同一客户端、显示器和模糊半径分别缓存，0 = 关闭缓存 |
 | `registerAlias` | `boolean` | `true` | 是否给每个客户端注册同名别名 |
+| `enableChatLunaTool` | `boolean` | `false` | 是否向 ChatLuna 与 Character 注册客户端查询与多模态截图工具 |
+| `chatLunaToolBlur` | `number` | `40` | Agent 截图使用的模糊半径，不受 `blur` 和 `minBlur` 影响 |
 | `authority` | `number` | `1` | 命令所需权限等级 |
 | `forceAuthority` | `number` | `3` | 使用 `-f` 绕过缓存所需权限等级 |

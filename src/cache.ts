@@ -2,7 +2,7 @@ import type { PeekBusyFrame } from './types'
 
 /**
  * 缓存一次 peek 的响应（图片 buffer 或 busy 状态）。
- * 在 cacheDuration 内对同一 (client, display) 的命令调用直接复用。
+ * 在 cacheDuration 内对同一 (client, display, blur) 的调用直接复用。
  */
 export interface CachedPeek {
     cachedAt: number
@@ -25,9 +25,13 @@ export class PeekCache {
         this.duration = duration
     }
 
-    /** key 形如 `client::display`。display 缺省用 'default'。 */
-    static key(client: string, display?: number | string) {
-        return `${client}::${display ?? 'default'}`
+    /** key 形如 `client::display::blur`。display 缺省用 'default'。 */
+    static key(
+        client: string,
+        display: number | string | undefined,
+        blur: number
+    ) {
+        return `${client}::${display ?? 'default'}::${blur}`
     }
 
     get(key: string): CachedPeek | undefined {
@@ -60,6 +64,13 @@ export class PeekCache {
         if (timer) {
             clearTimeout(timer)
             this.timers.delete(key)
+        }
+    }
+
+    deleteClient(client: string) {
+        const prefix = `${client}::`
+        for (const key of this.store.keys()) {
+            if (key.startsWith(prefix)) this.delete(key)
         }
     }
 

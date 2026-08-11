@@ -13,7 +13,9 @@ $inner:
     maxImageKB: Max screenshot size (client -> plugin, encrypted base64) in KB. Larger payloads are rejected. Default 8192 (8MB).
     finalMaxKB: Final image size budget after blur (KB). The plugin recompresses to JPEG within this budget before sending to chat. Default 200. Set 0 to disable.
     timeout: Timeout (ms) waiting for a client response.
-    cacheDuration: Screenshot cache duration in ms. Repeated calls within this window for the same client+display reuse the cached image. Set to 0 to disable. Default 5 minutes.
+    cacheDuration: Screenshot cache duration in ms. Repeated calls within this window for the same client, display, and blur radius reuse the cached image. Set to 0 to disable. Default 5 minutes.
     registerAlias: Whether to register each connected client's name as a command alias.
+    enableChatLunaTool: Whether to register the argus_list_screens and argus_peek_screen tools for ChatLuna and Character agents.
+    chatLunaToolBlur: Blur radius applied to screenshots returned to ChatLuna and Character agents. This is independent of blur and minBlur.
     authority: Minimum authority level required to run the command.
     forceAuthority: Minimum authority level required to use -f / --force to bypass the cache.

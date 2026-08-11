@@ -16,7 +16,7 @@ export interface HelloFrame {
     token: string
     version?: string
     displays?: DisplayInfo[]
-    defaultDisplay?: number
+    defaultDisplay?: number | string
 }
 
 /** Server → Client: 握手响应 */

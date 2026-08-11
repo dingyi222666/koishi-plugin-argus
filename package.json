@@ -31,10 +31,18 @@
     ],
     "peerDependencies": {
         "@koishijs/plugin-server": "^3.2.7",
-        "koishi": "^4.18.9"
+        "koishi": "^4.18.9",
+        "koishi-plugin-chatluna": "^1.4.0-alpha.41"
+    },
+    "peerDependenciesMeta": {
+        "koishi-plugin-chatluna": {
+            "optional": true
+        }
     },
     "dependencies": {
-        "@cf-wasm/photon": "^0.3.5"
+        "@cf-wasm/photon": "^0.3.5",
+        "@langchain/core": "^0.3.80",
+        "zod": "3.25.76"
     },
     "devDependencies": {
         "@types/ws": "^8.5.10",
@@ -49,6 +57,7 @@
         "eslint-plugin-n": "^16.6.2",
         "eslint-plugin-prettier": "^5.5.4",
         "eslint-plugin-promise": "^7.2.1",
+        "koishi-plugin-chatluna": "^1.4.0-alpha.41",
         "ws": "^8.18.0",
         "yakumo": "^1.0.0",
         "yakumo-esbuild": "^1.0.0",
@@ -73,6 +82,9 @@
         "service": {
             "required": [
                 "server"
+            ],
+            "optional": [
+                "chatluna"
             ]
         }
     },
