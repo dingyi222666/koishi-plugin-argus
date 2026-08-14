@@ -12,6 +12,11 @@
             "import": "./lib/index.mjs",
             "require": "./lib/index.cjs"
         },
+        "./chatluna": {
+            "types": "./lib/chatluna.d.ts",
+            "import": "./lib/chatluna.mjs",
+            "require": "./lib/chatluna.cjs"
+        },
         "./package.json": "./package.json"
     },
     "type": "module",
@@ -31,15 +36,28 @@
     ],
     "peerDependencies": {
         "@koishijs/plugin-server": "^3.2.7",
-        "koishi": "^4.18.9"
+        "koishi": "^4.18.9",
+        "koishi-plugin-chatluna": "^1.4.0-alpha.41",
+        "koishi-plugin-chatluna-storage-service": "^1.0.6"
+    },
+    "peerDependenciesMeta": {
+        "koishi-plugin-chatluna": {
+            "optional": true
+        },
+        "koishi-plugin-chatluna-storage-service": {
+            "optional": true
+        }
     },
     "dependencies": {
-        "@cf-wasm/photon": "^0.3.5"
+        "@cf-wasm/photon": "^0.3.5",
+        "@langchain/core": "^0.3.80",
+        "zod": "3.25.76"
     },
     "devDependencies": {
         "@types/ws": "^8.5.10",
         "@typescript-eslint/eslint-plugin": "^7.18.1-alpha.3",
         "@typescript-eslint/parser": "^8.45.1-alpha.0",
+        "@vue/reactivity": "^3.6.0-alpha.2",
         "esbuild": "^0.25.10",
         "esbuild-register": "npm:@shigma/esbuild-register@^1.1.1",
         "eslint": "^8.57.1",
@@ -49,6 +67,9 @@
         "eslint-plugin-n": "^16.6.2",
         "eslint-plugin-prettier": "^5.5.4",
         "eslint-plugin-promise": "^7.2.1",
+        "koishi-plugin-chatluna": "^1.4.0-alpha.41",
+        "koishi-plugin-chatluna-storage-service": "^1.0.6",
+        "mocha": "^9.2.2",
         "ws": "^8.18.0",
         "yakumo": "^1.0.0",
         "yakumo-esbuild": "^1.0.0",
@@ -60,6 +81,7 @@
     },
     "scripts": {
         "build": "yarn yakumo build",
+        "test": "yarn yakumo mocha -r esbuild-register",
         "bump": "yarn yakumo version",
         "dep": "yarn yakumo upgrade",
         "pub": "yarn yakumo publish",
@@ -73,6 +95,10 @@
         "service": {
             "required": [
                 "server"
+            ],
+            "optional": [
+                "chatluna",
+                "chatluna_storage"
             ]
         }
     },

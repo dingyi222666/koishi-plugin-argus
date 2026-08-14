@@ -1,29 +1,17 @@
 import { Context, Schema } from 'koishi'
 import {} from '@koishijs/plugin-server'
-import { ArgusServer } from './server'
 import { applyCommands } from './commands'
-import { PeekCache } from './cache'
-import type { BlurMode } from './blur'
+import { ArgusService } from './service'
+import type { ArgusConfig } from './types'
 
 export const name = 'argus'
 
-export const inject = ['server']
-
-export interface Config {
-    path: string
-    token: string
-    commandName: string
-    blur: number
-    blurMode: BlurMode
-    minBlur: number
-    maxImageKB: number
-    finalMaxKB: number
-    timeout: number
-    cacheDuration: number
-    registerAlias: boolean
-    authority: number
-    forceAuthority: number
+export const inject = {
+    required: ['server'],
+    optional: ['chatluna', 'chatluna_storage']
 }
+
+export type Config = ArgusConfig
 
 export const Config: Schema<Config> = Schema.object({
     path: Schema.string().default('/argus'),
@@ -37,6 +25,8 @@ export const Config: Schema<Config> = Schema.object({
     timeout: Schema.natural().default(15_000),
     cacheDuration: Schema.natural().default(5 * 60 * 1000),
     registerAlias: Schema.boolean().default(true),
+    enableChatLunaTool: Schema.boolean().default(false),
+    chatLunaToolBlur: Schema.natural().min(0).max(200).default(40),
     authority: Schema.natural().default(1),
     forceAuthority: Schema.natural().default(3)
 }).i18n({
@@ -65,25 +55,15 @@ export function apply(ctx: Context, config: Config) {
         )
     }
 
-    const cache = new PeekCache(config.cacheDuration)
+    const service = new ArgusService(ctx, config)
 
-    const server = new ArgusServer(ctx, {
-        path: config.path,
-        token: config.token,
-        timeout: config.timeout,
-        maxImageBytes: config.maxImageKB * 1024,
-        onClientChange: (event) => {
-            if (event.type === 'connect') {
-                ctx.emit('argus/client-connect', event.name)
-            } else {
-                ctx.emit('argus/client-disconnect', event.name)
-            }
-        }
-    })
+    applyCommands(ctx, service, config)
 
-    applyCommands(ctx, server, config, cache)
-
-    ctx.on('dispose', () => {
-        cache.clear()
-    })
+    if (config.enableChatLunaTool) {
+        ctx.inject(['chatluna', 'chatluna_storage'], async (ctx) => {
+            const { applyChatLunaTools } =
+                await import('koishi-plugin-argus/chatluna')
+            applyChatLunaTools(ctx, config, service)
+        })
+    }
 }

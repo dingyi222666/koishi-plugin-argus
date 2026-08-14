@@ -13,7 +13,9 @@ $inner:
     maxImageKB: Max screenshot size (client -> plugin, encrypted base64) in KB. Larger payloads are rejected. Default 8192 (8MB).
     finalMaxKB: Final image size budget after blur (KB). The plugin recompresses to JPEG within this budget before sending to chat. Default 200. Set 0 to disable.
     timeout: Timeout (ms) waiting for a client response.
-    cacheDuration: Screenshot cache duration in ms. Repeated calls within this window for the same client+display reuse the cached image. Set to 0 to disable. Default 5 minutes.
+    cacheDuration: Screenshot cache duration in ms. Repeated calls within this window for the same client, display, and blur radius reuse the cached image. Set to 0 to disable. Default 5 minutes.
     registerAlias: Whether to register each connected client's name as a command alias.
-    authority: Minimum authority level required to run the command.
-    forceAuthority: Minimum authority level required to use -f / --force to bypass the cache.
+    enableChatLunaTool: Whether to register online-client discovery and screenshot resource tools for ChatLuna and Character agents. ChatLuna Storage is required. Models with image input can read the screenshot attached to the result directly; other models can use the multimodal read_files tool to read it by URL.
+    chatLunaToolBlur: Blur radius used for ChatLuna and Character agent screenshots. This is independent of blur and minBlur (0 disables blur).
+    authority: Minimum authority level required to run the command or Agent tools.
+    forceAuthority: Minimum authority level required to use command -f / --force or the Agent force parameter to bypass the cache.

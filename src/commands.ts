@@ -1,10 +1,7 @@
 import { Context, h } from 'koishi'
-import type { ArgusServer } from './server'
 import type { Config } from '.'
-import { blurImage } from './blur'
-import { compressToBudget } from './compress'
-import { PeekCache, formatRemaining } from './cache'
-import { decryptBuffer } from './crypto'
+import { ArgusPeekError, type ArgusService } from './service'
+import type { ArgusPeekResult } from './types'
 
 interface CommandOptions {
     display?: number
@@ -15,15 +12,13 @@ interface CommandOptions {
 
 export function applyCommands(
     ctx: Context,
-    server: ArgusServer,
-    config: Config,
-    cache: PeekCache
+    service: ArgusService,
+    config: Config
 ) {
     const cmd = ctx
-        .command(
-            `${config.commandName} [name:string]`,
-            { authority: config.authority }
-        )
+        .command(`${config.commandName} [name:string]`, {
+            authority: config.authority
+        })
         .option('display', '-d <id:number>')
         .option('blur', '-b <radius:number>')
         .option('list', '-l, --list')
@@ -33,129 +28,18 @@ export function applyCommands(
             const opts = options as CommandOptions
 
             if (opts.list) {
-                return formatClientList(server, session)
-            }
-
-            const clients = server.listClients()
-            if (clients.length === 0) {
-                return session.text('.no-clients')
-            }
-
-            let target = name?.trim()
-            if (!target) {
-                if (clients.length === 1) {
-                    target = clients[0].name
-                } else {
-                    return session.text('.multiple-clients', [
-                        clients.map((c) => c.name).join(', ')
-                    ])
-                }
-            }
-
-            const client = server.getClient(target)
-            if (!client) {
-                return session.text('.client-offline', [target])
-            }
-
-            const radius = clamp(
-                opts.blur ?? config.blur,
-                config.minBlur,
-                200
-            )
-
-            const cacheKey = PeekCache.key(client.name, opts.display)
-            const cached = !opts.force ? cache.get(cacheKey) : undefined
-            // -b 与 cache 的关系：缓存的图已经按当时的 radius 模糊过，
-            // 临时调整 -b 时强制绕过缓存重新出图。
-            const cacheUsable =
-                cached &&
-                (opts.blur === undefined ||
-                    opts.blur === config.blur)
-
-            if (cacheUsable && cached) {
-                if (cached.busy) {
-                    return formatBusy(session, client.name, cached.busy, cached)
-                }
-                if (cached.image) {
-                    return [
-                        h.image(cached.image, cached.mime ?? 'image/png'),
-                        formatCacheNote(session, cached)
-                    ]
-                }
+                return formatClientList(service, session)
             }
 
             try {
-                const response = await server.peek(client.name, {
-                    display: opts.display
+                const result = await service.peek(name, {
+                    display: opts.display,
+                    blur: clamp(opts.blur ?? config.blur, config.minBlur, 200),
+                    force: opts.force
                 })
-
-                if (response.kind === 'busy') {
-                    cache.set(cacheKey, { busy: response.frame })
-                    return formatBusy(session, client.name, response.frame)
-                }
-
-                let buffer: Buffer
-                try {
-                    buffer = decodeImagePayload(response.frame, config.token)
-                } catch (err) {
-                    const message =
-                        err instanceof Error ? err.message : String(err)
-                    ctx.logger.warn(
-                        'argus decrypt failed for %s: %s',
-                        client.name,
-                        message
-                    )
-                    return session.text('.failed', ['decrypt_failed'])
-                }
-                const blurStart = Date.now()
-                const blurred = blurImage(buffer, {
-                    radius,
-                    mode: config.blurMode
-                })
-                const blurMs = Date.now() - blurStart
-
-                // 第二轮压缩：群里发图，体积越小越好。
-                // blur 总是输出 JPEG，所以 mime 总是 image/jpeg。
-                const finalBudget = config.finalMaxKB * 1024
-                const compressStart = Date.now()
-                const output =
-                    finalBudget > 0 && blurred.length > finalBudget
-                        ? compressToBudget(blurred, { targetBytes: finalBudget })
-                        : blurred
-                const compressMs = Date.now() - compressStart
-                const mime = 'image/jpeg'
-
-                ctx.logger.debug(
-                    'peek pipeline: blur=%dms compress=%dms %dKB→%dKB',
-                    blurMs,
-                    compressMs,
-                    Math.round(blurred.length / 1024),
-                    Math.round(output.length / 1024)
-                )
-
-                // 只有用配置默认 radius 时才入缓存，避免污染
-                if (opts.blur === undefined || opts.blur === config.blur) {
-                    cache.set(cacheKey, { image: output, mime })
-                }
-
-                return h.image(output, mime)
-            } catch (err) {
-                const message = err instanceof Error ? err.message : String(err)
-                ctx.logger.warn(
-                    'argus peek failed for %s: %s',
-                    client.name,
-                    message
-                )
-                if (message === 'timeout') {
-                    return session.text('.timeout', [client.name])
-                }
-                if (message === 'image_too_large') {
-                    return session.text('.image-too-large')
-                }
-                if (message.startsWith('disconnected:')) {
-                    return session.text('.client-offline', [client.name])
-                }
-                return session.text('.failed', [message])
+                return formatPeekResult(session, result)
+            } catch (error) {
+                return formatPeekError(session, error, name)
             }
         })
 
@@ -173,7 +57,9 @@ export function applyCommands(
                 .command(`${name}`, { authority: config.authority })
                 .option('display', '-d <id:number>')
                 .option('blur', '-b <radius:number>')
-                .option('force', '-f, --force', { authority: config.forceAuthority })
+                .option('force', '-f, --force', {
+                    authority: config.forceAuthority
+                })
                 .action(async ({ session, options }) => {
                     if (!session) return
                     const opts = options as CommandOptions
@@ -199,16 +85,10 @@ export function applyCommands(
             }
         }
 
-        for (const client of server.listClients()) register(client.name)
+        for (const client of service.listClients()) register(client.name)
 
         ctx.on('argus/client-connect', register)
-        ctx.on('argus/client-disconnect', (name) => {
-            unregister(name)
-            // 客户端下线，相关缓存全部清掉
-            for (const display of [undefined, ...range(0, 16)]) {
-                cache.delete(PeekCache.key(name, display))
-            }
-        })
+        ctx.on('argus/client-disconnect', unregister)
 
         ctx.on('dispose', () => {
             for (const dispose of disposers.values()) dispose()
@@ -220,10 +100,10 @@ export function applyCommands(
 }
 
 function formatClientList(
-    server: ArgusServer,
+    service: ArgusService,
     session: { text: (key: string, args?: unknown[]) => string }
 ) {
-    const clients = server.listClients()
+    const clients = service.listClients()
     if (clients.length === 0) return session.text('.no-clients')
     const lines = clients.map((c) => {
         const displays = c.displays.length
@@ -239,7 +119,58 @@ function formatClientList(
             : '-'
         return `· ${c.name} [${displays}]`
     })
-    return session.text('.list-header', [clients.length]) + '\n' + lines.join('\n')
+    return (
+        session.text('.list-header', [clients.length]) + '\n' + lines.join('\n')
+    )
+}
+
+function formatPeekResult(
+    session: { text: (key: string, args?: unknown[]) => string },
+    result: ArgusPeekResult
+) {
+    if (result.kind === 'busy') {
+        return formatBusy(session, result.client, result.busy, result.expiresAt)
+    }
+
+    const image = h.image(result.image, result.mime)
+    if (result.expiresAt === undefined) return image
+    return [image, formatCacheNote(session, result.expiresAt)]
+}
+
+function formatPeekError(
+    session: { text: (key: string, args?: unknown[]) => string },
+    error: unknown,
+    requestedName?: string
+) {
+    if (!(error instanceof ArgusPeekError)) {
+        const message = error instanceof Error ? error.message : String(error)
+        return session.text('.failed', [message])
+    }
+
+    switch (error.code) {
+        case 'no_clients':
+            return session.text('.no-clients')
+        case 'multiple_clients':
+            return session.text('.multiple-clients', [
+                error.details.clients?.join(', ') ?? ''
+            ])
+        case 'client_offline':
+            return session.text('.client-offline', [
+                error.details.client ?? requestedName ?? ''
+            ])
+        case 'timeout':
+            return session.text('.timeout', [
+                error.details.client ?? requestedName ?? ''
+            ])
+        case 'image_too_large':
+            return session.text('.image-too-large')
+        case 'decrypt_failed':
+            return session.text('.failed', ['decrypt_failed'])
+        case 'capture_failed':
+            return session.text('.failed', [
+                error.details.reason ?? error.message
+            ])
+    }
 }
 
 function formatBusy(
@@ -248,50 +179,35 @@ function formatBusy(
     },
     clientName: string,
     busy: { app?: string; title?: string; reason?: string },
-    cached?: { expiresAt: number }
+    expiresAt?: number
 ) {
     const app = busy.app || busy.title || 'unknown app'
-    const note = cached
-        ? ' ' +
-          session.text('.cache-note', [
-              formatRemaining(cached.expiresAt - Date.now())
-          ])
-        : ''
-    return session.text('.busy', [clientName, app]) + note
+    const message = session.text('.busy', [clientName, app])
+    if (expiresAt === undefined) return message
+    return message + ' ' + formatCacheNote(session, expiresAt)
 }
 
 function formatCacheNote(
     session: { text: (key: string, args?: unknown[]) => string },
-    cached: { expiresAt: number }
+    expiresAt: number
 ) {
     return session.text('.cache-note', [
-        formatRemaining(cached.expiresAt - Date.now())
+        formatRemaining(expiresAt - Date.now())
     ])
-}
-
-function clamp(v: number, min: number, max: number) {
-    return Math.max(min, Math.min(max, v))
 }
 
 function isSafeAlias(name: string) {
     return /^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(name)
 }
 
-function range(start: number, end: number) {
-    const out: number[] = []
-    for (let i = start; i < end; i++) out.push(i)
-    return out
+function clamp(value: number, min: number, max: number) {
+    return Math.max(min, Math.min(max, value))
 }
 
-function decodeImagePayload(
-    frame: { image: string; enc?: 'aes-256-gcm' | 'none' },
-    token: string
-): Buffer {
-    if (!frame.enc || frame.enc === 'none') {
-        return Buffer.from(frame.image, 'base64')
-    }
-    if (frame.enc === 'aes-256-gcm') {
-        return decryptBuffer(frame.image, token)
-    }
-    throw new Error(`unsupported_enc:${frame.enc}`)
+function formatRemaining(ms: number) {
+    const seconds = Math.max(0, Math.ceil(ms / 1000))
+    if (seconds < 60) return `${seconds}s`
+    const minutes = Math.floor(seconds / 60)
+    const remainder = seconds % 60
+    return remainder === 0 ? `${minutes}m` : `${minutes}m${remainder}s`
 }

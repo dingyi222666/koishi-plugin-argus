@@ -13,7 +13,9 @@ $inner:
     maxImageKB: 单张截图（客户端→插件，加密后 base64）大小上限（KB）。超过会拒收。默认 8192（8MB）。
     finalMaxKB: 发到群里的最终图片体积上限（KB）。插件做完模糊后会再压一遍 JPEG 到这个体积以内。默认 200。设 0 关闭。
     timeout: 等待客户端响应的超时（毫秒）。
-    cacheDuration: 截图缓存时长（毫秒）。在此期间内同一客户端 + 显示器的反复调用会直接返回缓存的图。设为 0 关闭缓存。默认 5 分钟。
+    cacheDuration: 截图缓存时长（毫秒）。在此期间内同一客户端 + 显示器 + 模糊半径的反复调用会直接返回缓存的图。设为 0 关闭缓存。默认 5 分钟。
     registerAlias: 是否给每个连进来的客户端自动注册同名命令作为别名。
-    authority: 命令所需的最低权限等级。
-    forceAuthority: 使用 -f / --force 绕过缓存所需的最低权限等级。
+    enableChatLunaTool: 是否为 ChatLuna 与 Character Agent 注册在线客户端查询和截图资源工具。需要同时启用 ChatLuna Storage。具备图片输入能力的模型可直接读取结果附带的截图内容；其他模型可借助多模态插件的 read_files 工具按 URL 读取。
+    chatLunaToolBlur: ChatLuna 与 Character Agent 截图使用的模糊半径，不受 blur 和 minBlur 影响（0 = 不模糊）。
+    authority: 命令及 Agent 工具所需的最低权限等级。
+    forceAuthority: 使用命令 -f / --force 或 Agent force 参数绕过缓存所需的最低权限等级。
