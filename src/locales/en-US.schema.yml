@@ -1,21 +1,21 @@
-$desc: Argus configuration
+$desc: Argus screenshot service
 $inner:
-    path: WebSocket mount path; must start with /.
-    token: Auth token for clients; if empty all connections are rejected.
-    commandName: Top-level command name (e.g. peek, spy, look).
-    blur: Default blur radius; larger means blurrier (0 disables blur).
+    path: WebSocket path used by clients to connect to Koishi, for example /argus.
+    token: Secret that clients must provide when connecting. Leave it empty to reject every client.
+    commandName: Name of the screenshot command. The default is peek; you can change it to spy or look.
+    blur: Default blur amount. Higher values produce a stronger blur; 0 disables blur.
     blurMode:
-        $desc: Blur algorithm
+        $desc: Blur method
         $inner:
-            - Gaussian blur (better quality, slower)
-            - Fast blur (jimp.blur, faster)
-    minBlur: Lower bound for the temporary -b override, to prevent unblurred captures.
-    maxImageKB: Max screenshot size (client -> plugin, encrypted base64) in KB. Larger payloads are rejected. Default 8192 (8MB).
-    finalMaxKB: Final image size budget after blur (KB). The plugin recompresses to JPEG within this budget before sending to chat. Default 200. Set 0 to disable.
-    timeout: Timeout (ms) waiting for a client response.
-    cacheDuration: Screenshot cache duration in ms. Repeated calls within this window for the same client, display, and blur radius reuse the cached image. Set to 0 to disable. Default 5 minutes.
-    registerAlias: Whether to register each connected client's name as a command alias.
-    enableChatLunaTool: Whether to register online-client discovery and screenshot resource tools for ChatLuna and Character agents. ChatLuna Storage is required. Models with image input can read the screenshot attached to the result directly; other models can use the multimodal read_files tool to read it by URL.
-    chatLunaToolBlur: Blur radius used for ChatLuna and Character agent screenshots. This is independent of blur and minBlur (0 disables blur).
-    authority: Minimum authority level required to run the command or Agent tools.
-    forceAuthority: Minimum authority level required to use command -f / --force or the Agent force parameter to bypass the cache.
+            - Gaussian blur: smoother results, but slower processing.
+            - Fast blur: quicker processing for faster responses.
+    minBlur: Lowest blur amount allowed by the command's temporary -b option. Set to 0 to allow completely clear captures.
+    maxImageKB: Maximum size of a screenshot uploaded by a client, in KB. Larger screenshots are rejected. The default is 8192 KB (8 MB).
+    finalMaxKB: Maximum size of the processed image sent to chat, in KB. Images are recompressed automatically. The default is 200 KB; set to 0 for no limit.
+    timeout: Maximum time to wait for a client response, in milliseconds. A timeout is reported as a failed capture.
+    cacheDuration: How long screenshots remain cached, in milliseconds. Requests for the same client, display, and blur amount reuse the cached image during this period. The default is 5 minutes; set to 0 to disable caching.
+    registerAlias: Whether to create a command with the same name for each connected client. For example, a client named dingyi can be reached with /dingyi.
+    enableChatLunaTool: Whether to provide ChatLuna and Character Agent with tools for listing online clients and capturing screenshots. ChatLuna Storage must also be enabled.
+    chatLunaToolBlur: Blur amount used for ChatLuna and Character Agent screenshots. It is independent of blur and minBlur; 0 disables blur.
+    authority: Minimum authority level required to use the screenshot command and Agent tools.
+    forceAuthority: Minimum authority level required to use -f / --force and skip the cache.

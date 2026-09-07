@@ -1,6 +1,6 @@
 commands:
     peek:
-        description: Peek at a connected client's screen.
+        description: Capture a screenshot from a connected client.
         usage: |-
             peek [name] [-d display] [-b blur] [-f] [--list]
         examples: |-
@@ -11,17 +11,17 @@ commands:
             peek dingyi -f
             peek --list
         options:
-            display: Display index on the client.
-            blur: Override blur radius (must be >= configured minBlur).
-            list: List currently connected clients.
-            force: Bypass the cache (requires forceAuthority).
+            display: Display ID to capture.
+            blur: Temporarily change the blur amount. It cannot be lower than minBlur.
+            list: Show all currently connected clients.
+            force: Capture a fresh screenshot instead of using the cache. Requires forceAuthority.
         messages:
-            no-clients: No clients are connected. They may be offline or powered off.
-            multiple-clients: 'Multiple clients online, please specify: {0}'
+            no-clients: No clients are currently connected.
+            multiple-clients: 'More than one client is online. Specify a client name: {0}'
             client-offline: 'Client "{0}" is not connected.'
-            timeout: 'Client "{0}" timed out.'
-            image-too-large: Screenshot size exceeded the limit.
-            failed: 'Capture failed: {0}'
-            list-header: 'Connected clients ({0}):'
+            timeout: 'Client "{0}" did not respond in time.'
+            image-too-large: The screenshot is larger than the configured limit.
+            failed: 'Screenshot failed: {0}'
+            list-header: 'Online clients ({0}):'
             busy: 'Client "{0}" is busy: {1}'
-            cache-note: '(cached, {0} left)'
+            cache-note: '(cached; {0} remaining)'
