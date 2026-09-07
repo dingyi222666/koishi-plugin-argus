@@ -1,19 +1,21 @@
-$desc: Argus 配置
+$desc: Argus 屏幕截图服务
 $inner:
-    path: WebSocket 服务挂载路径，必须以 / 开头。
-    token: 客户端鉴权 token；为空时所有连接都会被拒绝。
-    commandName: 主命令名（例如 peek、spy、look）。
-    blur: 默认模糊半径，越大越糊（0 = 不模糊）。
+    path: 客户端连接到 Koishi 时使用的 WebSocket 路径，例如 /argus。
+    token: 客户端连接时必须提供的密钥。留空会拒绝所有客户端连接。
+    commandName: 截图命令的名称，默认是 peek，也可以改成 spy 或 look。
+    blur: 截图的默认模糊程度，数值越大越模糊；设置为 0 表示不模糊。
     blurMode:
-        $desc: 模糊算法
+        $desc: 模糊方式
         $inner:
-            - 高斯模糊（质量好，但慢）
-            - 快速模糊（jimp.blur，速度快）
-    minBlur: 命令里 -b 临时调小模糊时不可低于此值，防止裸奔。
-    maxImageKB: 单张截图（客户端→插件，加密后 base64）大小上限（KB）。超过会拒收。默认 8192（8MB）。
-    finalMaxKB: 发到群里的最终图片体积上限（KB）。插件做完模糊后会再压一遍 JPEG 到这个体积以内。默认 200。设 0 关闭。
-    timeout: 等待客户端响应的超时（毫秒）。
-    cacheDuration: 截图缓存时长（毫秒）。在此期间内同一客户端 + 显示器的反复调用会直接返回缓存的图。设为 0 关闭缓存。默认 5 分钟。
-    registerAlias: 是否给每个连进来的客户端自动注册同名命令作为别名。
-    authority: 命令所需的最低权限等级。
-    forceAuthority: 使用 -f / --force 绕过缓存所需的最低权限等级。
+            - 高斯模糊：效果更自然，但处理速度较慢。
+            - 快速模糊：处理速度更快，适合对响应速度要求较高的场景。
+    minBlur: 允许在命令中使用 -b 临时降低模糊程度的最低值。设为 0 表示允许完全不模糊。
+    maxImageKB: 客户端上传截图的大小上限，单位是 KB。超过上限的截图会被拒绝，默认是 8192 KB（8 MB）。
+    finalMaxKB: 发送到聊天中的图片大小上限，单位是 KB。处理完成后会自动压缩图片，默认是 200 KB；设为 0 表示不限制。
+    timeout: 等待客户端返回截图的最长时间，单位是毫秒。超时后会提示截图失败。
+    cacheDuration: 截图缓存时间，单位是毫秒。相同客户端、显示器和模糊程度在这段时间内会复用上一张截图，默认是 5 分钟；设为 0 表示关闭缓存。
+    registerAlias: 是否为每个在线客户端创建一个同名命令。例如客户端名为 dingyi 时，可以直接使用 /dingyi 截图。
+    enableChatLunaTool: 是否向 ChatLuna 和 Character Agent 提供查询在线客户端、获取截图的工具。启用前需要安装并启用 ChatLuna Storage。
+    chatLunaToolBlur: ChatLuna 和 Character Agent 使用的模糊程度。它独立于上面的 blur 和 minBlur；设置为 0 表示不模糊。
+    authority: 使用截图命令和 Agent 工具所需的最低权限等级。
+    forceAuthority: 使用 -f / --force 获取最新截图、跳过缓存所需的最低权限等级。

@@ -1,80 +1,63 @@
-import type { PeekBusyFrame } from './types'
-
-/**
- * 缓存一次 peek 的响应（图片 buffer 或 busy 状态）。
- * 在 cacheDuration 内对同一 (client, display) 的命令调用直接复用。
- */
-export interface CachedPeek {
-    cachedAt: number
-    expiresAt: number
-    /** 已经过模糊处理的最终 buffer，busy 时为空。 */
-    image?: Buffer
-    /** 缓存图片的 mime（'image/png' | 'image/jpeg'）。 */
-    mime?: string
-    /** busy 状态：客户端在玩游戏 / 全屏。 */
-    busy?: PeekBusyFrame
-}
+import type { Context, Disposable } from 'koishi'
+import type { ArgusPeekResult } from './types'
 
 export class PeekCache {
-    private store = new Map<string, CachedPeek>()
-    private timers = new Map<string, NodeJS.Timeout>()
+    private clients = new Map<string, Map<string, CacheEntry>>()
 
-    constructor(private duration: number) {}
+    constructor(
+        private ctx: Context,
+        private duration: number
+    ) {}
 
-    setDuration(duration: number) {
-        this.duration = duration
+    get(client: string, display: number | string | undefined, blur: number) {
+        const entries = this.clients.get(client)
+        const key = JSON.stringify([display ?? null, blur])
+        const entry = entries?.get(key)
+        if (!entry) return
+        if (Date.now() < entry.result.expiresAt) return entry.result
+        this.delete(client, key)
     }
 
-    /** key 形如 `client::display`。display 缺省用 'default'。 */
-    static key(client: string, display?: number | string) {
-        return `${client}::${display ?? 'default'}`
-    }
-
-    get(key: string): CachedPeek | undefined {
-        const entry = this.store.get(key)
-        if (!entry) return undefined
-        if (Date.now() >= entry.expiresAt) {
-            this.delete(key)
-            return undefined
-        }
-        return entry
-    }
-
-    set(key: string, entry: Omit<CachedPeek, 'cachedAt' | 'expiresAt'>) {
+    set(
+        client: string,
+        display: number | string | undefined,
+        blur: number,
+        result: ArgusPeekResult
+    ) {
         if (this.duration <= 0) return
-        this.delete(key)
-        const cachedAt = Date.now()
-        const full: CachedPeek = {
-            ...entry,
-            cachedAt,
-            expiresAt: cachedAt + this.duration
-        }
-        this.store.set(key, full)
-        const timer = setTimeout(() => this.delete(key), this.duration)
-        this.timers.set(key, timer)
+        const key = JSON.stringify([display ?? null, blur])
+        this.delete(client, key)
+        let entries = this.clients.get(client)
+        if (!entries) this.clients.set(client, (entries = new Map()))
+        entries.set(key, {
+            result: { ...result, expiresAt: Date.now() + this.duration },
+            dispose: this.ctx.setTimeout(
+                () => this.delete(client, key),
+                this.duration
+            )
+        })
     }
 
-    delete(key: string) {
-        this.store.delete(key)
-        const timer = this.timers.get(key)
-        if (timer) {
-            clearTimeout(timer)
-            this.timers.delete(key)
-        }
+    deleteClient(client: string) {
+        const entries = this.clients.get(client)
+        if (!entries) return
+        for (const entry of entries.values()) entry.dispose()
+        this.clients.delete(client)
     }
 
     clear() {
-        for (const timer of this.timers.values()) clearTimeout(timer)
-        this.timers.clear()
-        this.store.clear()
+        for (const client of this.clients.keys()) this.deleteClient(client)
+    }
+
+    private delete(client: string, key: string) {
+        const entries = this.clients.get(client)
+        entries?.get(key)?.dispose()
+        entries?.delete(key)
+        if (!entries?.size) this.clients.delete(client)
     }
 }
 
-export function formatRemaining(ms: number) {
-    const sec = Math.max(0, Math.ceil(ms / 1000))
-    if (sec < 60) return `${sec}s`
-    const minutes = Math.floor(sec / 60)
-    const seconds = sec % 60
-    if (seconds === 0) return `${minutes}m`
-    return `${minutes}m${seconds}s`
+interface CacheEntry {
+    result: ArgusPeekResult & { expiresAt: number }
+    dispose: Disposable
 }

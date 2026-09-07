@@ -16,7 +16,7 @@ export interface HelloFrame {
     token: string
     version?: string
     displays?: DisplayInfo[]
-    defaultDisplay?: number
+    defaultDisplay?: number | string
 }
 
 /** Server → Client: 握手响应 */
@@ -100,7 +100,46 @@ export type ClientFrame =
     | ByeFrame
 
 export type ServerFrame =
-    | HelloAckFrame
-    | PeekRequestFrame
-    | PingFrame
-    | PongFrame
+    HelloAckFrame | PeekRequestFrame | PingFrame | PongFrame
+
+export interface ArgusClientInfo {
+    name: string
+    displays: DisplayInfo[]
+    defaultDisplay?: number | string
+}
+
+export type ArgusPeekErrorCode =
+    | 'no_clients'
+    | 'multiple_clients'
+    | 'client_offline'
+    | 'timeout'
+    | 'image_too_large'
+    | 'decrypt_failed'
+    | 'capture_failed'
+
+export interface ArgusPeekErrorDetails {
+    client?: string
+    clients?: string[]
+    reason?: string
+}
+
+export interface ArgusPeekOptions {
+    display?: number | string
+    blur?: number
+    force?: boolean
+}
+
+export type ArgusPeekResult =
+    | {
+          kind: 'image'
+          client: string
+          image: Buffer
+          mime: 'image/jpeg'
+          expiresAt?: number
+      }
+    | {
+          kind: 'busy'
+          client: string
+          busy: PeekBusyFrame
+          expiresAt?: number
+      }

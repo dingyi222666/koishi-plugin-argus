@@ -1,152 +1,108 @@
-import type { Context } from 'koishi'
-import type { IncomingMessage } from 'node:http'
+import type { Context, Disposable } from 'koishi'
+import type {} from '@koishijs/plugin-server'
+import { randomUUID } from 'node:crypto'
 import type { WebSocket } from 'ws'
+import type { Config } from '.'
+import { ArgusPeekError } from './errors'
 import type {
+    ArgusClientInfo,
     ClientFrame,
-    DisplayInfo,
+    HelloFrame,
     PeekBusyFrame,
-    PeekRequestFrame,
     PeekResultFrame,
     ServerFrame
 } from './types'
 
-export interface ArgusServerConfig {
-    path: string
-    token: string
-    timeout: number
-    maxImageBytes: number
-    onClientChange?: (event: ClientChangeEvent) => void
-}
-
-export interface ClientChangeEvent {
-    type: 'connect' | 'disconnect'
-    name: string
-}
-
-export interface PendingPeek {
-    resolve: (response: PeekResponse) => void
-    reject: (error: Error) => void
-    timer: NodeJS.Timeout
-}
-
-/** peek 调用的统一返回值。要么是图，要么是“客户端忙”。 */
-export type PeekResponse =
-    | { kind: 'image'; frame: PeekResultFrame }
-    | { kind: 'busy'; frame: PeekBusyFrame }
-
-export interface ArgusClient {
-    name: string
-    socket: WebSocket
-    version?: string
-    displays: DisplayInfo[]
-    defaultDisplay?: number
-    connectedAt: number
-    pending: Map<string, PendingPeek>
-    /** 心跳：上次收到任何客户端帧的时间戳。 */
-    lastSeen: number
-    heartbeatTimer?: NodeJS.Timeout
-}
-
-const HEARTBEAT_INTERVAL = 30_000
-const HEARTBEAT_TIMEOUT = HEARTBEAT_INTERVAL * 3
-
 export class ArgusServer {
-    /** name → client */
     private clients = new Map<string, ArgusClient>()
+    private readonly maxFrameText: number
 
     constructor(
         private ctx: Context,
         private config: ArgusServerConfig
     ) {
-        this.mount()
+        // Include base64 expansion and JSON metadata in the transport limit.
+        this.maxFrameText = Math.max(
+            Math.ceil((config.maxImageKB * 1024) / BASE64_BYTES_PER_CHAR) +
+                4096,
+            4 * 1024 * 1024
+        )
+        const layer = ctx.server.ws(config.path, (socket) =>
+            this.handleConnection(socket)
+        )
+        ctx.on('dispose', () => {
+            for (const client of this.clients.values()) {
+                this.cleanupClient(client, 'plugin_dispose')
+            }
+            layer.close()
+        })
     }
 
-    listClients(): ArgusClient[] {
+    listClients() {
         return [...this.clients.values()]
     }
 
-    getClient(name: string): ArgusClient | undefined {
+    getClient(name: string) {
         return this.clients.get(name)
     }
 
-    /**
-     * 派发一次截图请求并等待结果。可能返回图片或“客户端忙”。
-     */
-    async peek(
-        name: string,
-        options: { display?: number } = {}
+    peek(
+        client: ArgusClient,
+        display?: number | string
     ): Promise<PeekResponse> {
-        const client = this.clients.get(name)
-        if (!client) throw new Error(`client_offline:${name}`)
-
-        const id = randomId()
-        const frame: PeekRequestFrame = {
-            type: 'peek',
-            id,
-            display: options.display
-        }
-
-        return await new Promise<PeekResponse>((resolve, reject) => {
-            const timer = setTimeout(() => {
+        const id = randomUUID()
+        return new Promise((resolve, reject) => {
+            const timer = this.ctx.setTimeout(() => {
                 client.pending.delete(id)
-                reject(new Error('timeout'))
+                reject(
+                    new ArgusPeekError(
+                        'timeout',
+                        'screenshot request timed out',
+                        {
+                            client: client.name
+                        }
+                    )
+                )
             }, this.config.timeout)
 
             client.pending.set(id, { resolve, reject, timer })
-
-            try {
-                this.send(client.socket, frame)
-            } catch (err) {
-                clearTimeout(timer)
+            if (!this.send(client.socket, { type: 'peek', id, display })) {
+                timer()
                 client.pending.delete(id)
                 reject(
-                    err instanceof Error ? err : new Error(String(err))
+                    new ArgusPeekError('client_offline', 'socket is not open', {
+                        client: client.name
+                    })
                 )
             }
         })
     }
 
-    private mount() {
-        const layer = this.ctx.server.ws(this.config.path, (socket, req) =>
-            this.handleConnection(socket, req)
-        )
-        // ctx 卸载时 plugin-server 会自己 close，这里再保险一下。
-        this.ctx.on('dispose', () => {
-            for (const client of this.clients.values()) {
-                this.cleanup(client, 'plugin_dispose')
-            }
-            this.clients.clear()
-            layer.close()
-        })
-    }
-
-    private handleConnection(socket: WebSocket, _req: IncomingMessage) {
-        // 在 hello 完成前不进入 clients 表。
+    private handleConnection(socket: WebSocket) {
         let client: ArgusClient | undefined
-        // 限制握手时间，避免空连接挂着。
-        const helloTimer = setTimeout(() => {
-            if (!client) {
-                this.send(socket, {
-                    type: 'hello_ack',
-                    ok: false,
-                    error: 'hello_timeout'
-                })
-                socket.close(4002, 'hello_timeout')
-            }
+        const helloTimer = this.ctx.setTimeout(() => {
+            this.send(socket, {
+                type: 'hello_ack',
+                ok: false,
+                error: 'hello_timeout'
+            })
+            socket.close(4002, 'hello_timeout')
         }, 10_000)
 
         socket.on('message', (raw, isBinary) => {
-            if (isBinary) return // 我们只用 JSON 文本帧
-            const text =
-                typeof raw === 'string' ? raw : raw.toString('utf8')
-            // 防御：拒绝过大的控制帧
-            if (text.length > 4 * 1024 * 1024) {
+            if (isBinary || socket.readyState !== socket.OPEN) return
+            const text = raw.toString('utf8')
+            if (text.length > this.maxFrameText) {
                 socket.close(1009, 'message_too_large')
                 return
             }
+
             let frame: ClientFrame
             try {
-                frame = JSON.parse(text) as ClientFrame
+                frame = JSON.parse(text)
+                if (!frame || typeof frame.type !== 'string') {
+                    throw new Error('invalid frame')
+                }
             } catch {
                 socket.close(1003, 'invalid_json')
                 return
@@ -157,28 +113,27 @@ export class ArgusServer {
                     socket.close(4003, 'expect_hello')
                     return
                 }
-                clearTimeout(helloTimer)
+                helloTimer()
                 client = this.handleHello(socket, frame)
                 return
             }
 
             client.lastSeen = Date.now()
-            this.handleAuthedFrame(client, frame)
+            this.handleFrame(client, frame)
         })
 
         socket.on('close', () => {
-            clearTimeout(helloTimer)
-            if (client) this.cleanup(client, 'socket_close')
+            helloTimer()
+            if (client) this.cleanupClient(client, 'socket_close')
         })
-
-        socket.on('error', (err) => {
-            this.ctx.logger.warn('argus socket error: %s', err.message)
+        socket.on('error', (error) => {
+            this.ctx.logger.warn('argus socket error: %s', error.message)
         })
     }
 
     private handleHello(
         socket: WebSocket,
-        frame: ClientFrame & { type: 'hello' }
+        frame: HelloFrame
     ): ArgusClient | undefined {
         if (!frame.token || frame.token !== this.config.token) {
             this.send(socket, {
@@ -187,41 +142,39 @@ export class ArgusServer {
                 error: 'auth_failed'
             })
             socket.close(4001, 'auth_failed')
-            return undefined
+            return
         }
-        const name = (frame.name || '').trim()
-        if (!name || !/^[a-zA-Z0-9_\-.]{1,32}$/.test(name)) {
+
+        const name = typeof frame.name === 'string' ? frame.name.trim() : ''
+        if (!/^[a-zA-Z0-9_\-.]{1,32}$/.test(name)) {
             this.send(socket, {
                 type: 'hello_ack',
                 ok: false,
                 error: 'invalid_name'
             })
             socket.close(4004, 'invalid_name')
-            return undefined
+            return
         }
 
-        // 同名重连 → 踢掉老的
-        const old = this.clients.get(name)
-        if (old) this.cleanup(old, 'replaced')
+        if (!this.send(socket, { type: 'hello_ack', ok: true })) return
+        const previous = this.clients.get(name)
+        if (previous) this.cleanupClient(previous, 'replaced')
 
         const client: ArgusClient = {
             name,
             socket,
             version: frame.version,
-            displays: frame.displays ?? [],
+            displays: Array.isArray(frame.displays) ? frame.displays : [],
             defaultDisplay: frame.defaultDisplay,
             connectedAt: Date.now(),
             pending: new Map(),
             lastSeen: Date.now()
         }
 
-        client.heartbeatTimer = setInterval(() => {
+        client.heartbeatTimer = this.ctx.setInterval(() => {
             const now = Date.now()
             if (now - client.lastSeen > HEARTBEAT_TIMEOUT) {
-                this.ctx.logger.info(
-                    'argus client %s heartbeat lost',
-                    client.name
-                )
+                this.ctx.logger.info('argus client %s heartbeat lost', name)
                 socket.close(4005, 'heartbeat_lost')
                 return
             }
@@ -229,72 +182,71 @@ export class ArgusServer {
         }, HEARTBEAT_INTERVAL)
 
         this.clients.set(name, client)
-        this.send(socket, { type: 'hello_ack', ok: true })
-
         this.ctx.logger.info(
             'argus client connected: %s (displays=%d)',
             name,
             client.displays.length
         )
-        this.config.onClientChange?.({ type: 'connect', name })
-
+        this.ctx.emit('argus/client-connect', name)
         return client
     }
 
-    private handleAuthedFrame(client: ArgusClient, frame: ClientFrame) {
-        switch (frame.type) {
-            case 'peek_result': {
-                const pending = client.pending.get(frame.id)
-                if (!pending) return
-                clearTimeout(pending.timer)
-                client.pending.delete(frame.id)
+    private handleFrame(client: ArgusClient, frame: ClientFrame) {
+        if (this.clients.get(client.name) !== client) return
 
-                const size = (frame.image?.length ?? 0) * 0.75
-                if (size > this.config.maxImageBytes) {
-                    pending.reject(new Error('image_too_large'))
-                    return
-                }
-                pending.resolve({ kind: 'image', frame })
-                return
-            }
-            case 'peek_busy': {
-                const pending = client.pending.get(frame.id)
-                if (!pending) return
-                clearTimeout(pending.timer)
-                client.pending.delete(frame.id)
-                pending.resolve({ kind: 'busy', frame })
-                return
-            }
+        switch (frame.type) {
+            case 'peek_result':
+            case 'peek_busy':
             case 'peek_error': {
                 const pending = client.pending.get(frame.id)
                 if (!pending) return
-                clearTimeout(pending.timer)
+                pending.timer()
                 client.pending.delete(frame.id)
-                pending.reject(new Error(frame.error || 'client_error'))
+
+                if (frame.type === 'peek_error') {
+                    pending.reject(new Error(frame.error || 'client_error'))
+                } else if (frame.type === 'peek_busy') {
+                    pending.resolve({ kind: 'busy', frame })
+                } else if (typeof frame.image !== 'string') {
+                    pending.reject(new Error('invalid_image'))
+                } else if (
+                    frame.image.length * BASE64_BYTES_PER_CHAR >
+                    this.config.maxImageKB * 1024
+                ) {
+                    pending.reject(
+                        new ArgusPeekError(
+                            'image_too_large',
+                            'screenshot exceeds size limit',
+                            {
+                                client: client.name
+                            }
+                        )
+                    )
+                } else {
+                    pending.resolve({ kind: 'image', frame })
+                }
                 return
             }
             case 'ping':
                 this.send(client.socket, { type: 'pong', t: frame.t })
                 return
-            case 'pong':
-                // lastSeen 已更新
-                return
             case 'bye':
-                client.socket.close(1000, frame.reason || 'bye')
-                return
-            case 'hello':
-                // 重复 hello，忽略
-                return
+                client.socket.close(1000, 'bye')
         }
     }
 
-    private cleanup(client: ArgusClient, reason: string) {
-        if (client.heartbeatTimer) clearInterval(client.heartbeatTimer)
+    private cleanupClient(client: ArgusClient, reason: string) {
+        client.heartbeatTimer?.()
         for (const pending of client.pending.values()) {
-            clearTimeout(pending.timer)
-            pending.reject(new Error(`disconnected:${reason}`))
+            pending.timer()
+            pending.reject(
+                new ArgusPeekError('client_offline', `disconnected:${reason}`, {
+                    client: client.name
+                })
+            )
         }
         client.pending.clear()
+
         if (this.clients.get(client.name) === client) {
             this.clients.delete(client.name)
             this.ctx.logger.info(
@@ -302,29 +254,51 @@ export class ArgusServer {
                 client.name,
                 reason
             )
-            this.config.onClientChange?.({
-                type: 'disconnect',
-                name: client.name
-            })
+            this.ctx.emit('argus/client-disconnect', client.name)
         }
+
+        if (client.socket.readyState === client.socket.OPEN) {
+            client.socket.close(1000, reason)
+        }
+    }
+
+    private send(socket: WebSocket, frame: ServerFrame): boolean {
+        if (socket.readyState !== socket.OPEN) return false
         try {
-            if (
-                client.socket.readyState === client.socket.OPEN ||
-                client.socket.readyState === client.socket.CONNECTING
-            ) {
-                client.socket.close(1000, reason)
-            }
-        } catch {
-            // ignore
+            socket.send(JSON.stringify(frame))
+            return true
+        } catch (error) {
+            this.ctx.logger.warn('argus send failed: %s', error)
+            socket.close(1011, 'send_failed')
+            return false
         }
     }
-
-    private send(socket: WebSocket, frame: ServerFrame) {
-        if (socket.readyState !== socket.OPEN) return
-        socket.send(JSON.stringify(frame))
-    }
 }
 
-function randomId() {
-    return Math.random().toString(36).slice(2, 10)
+type ArgusServerConfig = Pick<
+    Config,
+    'path' | 'token' | 'timeout' | 'maxImageKB'
+>
+
+interface PendingPeek {
+    resolve: (response: PeekResponse) => void
+    reject: (error: Error) => void
+    timer: Disposable
 }
+
+type PeekResponse =
+    | { kind: 'image'; frame: PeekResultFrame }
+    | { kind: 'busy'; frame: PeekBusyFrame }
+
+export interface ArgusClient extends ArgusClientInfo {
+    socket: WebSocket
+    version?: string
+    connectedAt: number
+    pending: Map<string, PendingPeek>
+    lastSeen: number
+    heartbeatTimer?: Disposable
+}
+
+const HEARTBEAT_INTERVAL = 30_000
+const HEARTBEAT_TIMEOUT = HEARTBEAT_INTERVAL * 3
+const BASE64_BYTES_PER_CHAR = 0.75

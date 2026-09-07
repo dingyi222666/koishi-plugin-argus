@@ -12,6 +12,11 @@
             "import": "./lib/index.mjs",
             "require": "./lib/index.cjs"
         },
+        "./chatluna": {
+            "types": "./lib/chatluna.d.ts",
+            "import": "./lib/chatluna.mjs",
+            "require": "./lib/chatluna.cjs"
+        },
         "./package.json": "./package.json"
     },
     "type": "module",
@@ -31,10 +36,22 @@
     ],
     "peerDependencies": {
         "@koishijs/plugin-server": "^3.2.7",
-        "koishi": "^4.18.9"
+        "koishi": "^4.18.9",
+        "koishi-plugin-chatluna": "^1.4.0-alpha.41",
+        "koishi-plugin-chatluna-storage-service": "^1.0.6"
+    },
+    "peerDependenciesMeta": {
+        "koishi-plugin-chatluna": {
+            "optional": true
+        },
+        "koishi-plugin-chatluna-storage-service": {
+            "optional": true
+        }
     },
     "dependencies": {
-        "@cf-wasm/photon": "^0.3.5"
+        "@cf-wasm/photon": "^0.3.5",
+        "@langchain/core": "^0.3.80",
+        "zod": "3.25.76"
     },
     "devDependencies": {
         "@types/ws": "^8.5.10",
@@ -49,10 +66,11 @@
         "eslint-plugin-n": "^16.6.2",
         "eslint-plugin-prettier": "^5.5.4",
         "eslint-plugin-promise": "^7.2.1",
+        "koishi-plugin-chatluna": "^1.4.0-alpha.41",
+        "koishi-plugin-chatluna-storage-service": "^1.0.6",
         "ws": "^8.18.0",
         "yakumo": "^1.0.0",
         "yakumo-esbuild": "^1.0.0",
-        "yakumo-mocha": "^1.0.0",
         "yakumo-tsc": "^1.0.0"
     },
     "engines": {
@@ -71,8 +89,15 @@
             "zh": "百眼巨人 Argus：通过 /peek 命令让群友偷窥你的电脑屏幕。"
         },
         "service": {
+            "implements": [
+                "argus"
+            ],
             "required": [
                 "server"
+            ],
+            "optional": [
+                "chatluna",
+                "chatluna_storage"
             ]
         }
     },

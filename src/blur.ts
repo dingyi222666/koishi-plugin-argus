@@ -1,6 +1,6 @@
 import {
-    PhotonImage,
     gaussian_blur,
+    PhotonImage,
     resize,
     SamplingFilter
 } from '@cf-wasm/photon/node'

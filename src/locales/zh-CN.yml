@@ -1,6 +1,6 @@
 commands:
     peek:
-        description: 偷窥已连接客户端的电脑屏幕。
+        description: 获取已连接客户端的屏幕截图。
         usage: |-
             peek [name] [-d display] [-b blur] [-f] [--list]
         examples: |-
@@ -11,17 +11,17 @@ commands:
             peek dingyi -f
             peek --list
         options:
-            display: 指定客户端的显示器编号。
-            blur: 临时调整模糊半径，不能低于配置中的 minBlur。
+            display: 指定要截图的显示器编号。
+            blur: 临时调整模糊程度，不能低于 minBlur。
             list: 列出当前在线的客户端。
-            force: 绕过缓存强制重新截图（需要 forceAuthority）。
+            force: 获取最新截图并跳过缓存，需要 forceAuthority 权限。
         messages:
-            no-clients: 当前没有任何客户端在线，可能是未启动或已关机。
-            multiple-clients: 当前有多个客户端在线，请指定名称：{0}
+            no-clients: 当前没有在线客户端。
+            multiple-clients: 当前有多个客户端在线，请指定客户端名称：{0}
             client-offline: 客户端「{0}」未在线。
-            timeout: 客户端「{0}」响应超时。
-            image-too-large: 截图体积超过限制。
-            failed: 截图失败：{0}
-            list-header: 当前在线客户端 ({0})：
-            busy: 客户端「{0}」正忙：{1}
+            timeout: 客户端「{0}」未能及时返回截图。
+            image-too-large: 截图大小超过了配置的上限。
+            failed: 获取截图失败：{0}
+            list-header: 在线客户端 ({0})：
+            busy: 客户端「{0}」当前无法截图：{1}
             cache-note: （缓存，剩余 {0}）
