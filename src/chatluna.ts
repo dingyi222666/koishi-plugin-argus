@@ -2,15 +2,16 @@ import { tool } from '@langchain/core/tools'
 import type { MessageContentComplex } from '@langchain/core/messages'
 import { Context, type Session } from 'koishi'
 import {
-    ModelCapabilities,
-    type ChatLunaToolRunnable
+    type ChatLunaToolRunnable,
+    ModelCapabilities
 } from 'koishi-plugin-chatluna/llm-core/platform/types'
-// 仅为引入 `ctx.chatluna` 的类型声明
 import type {} from 'koishi-plugin-chatluna/services/chat'
 import type {} from 'koishi-plugin-chatluna-storage-service'
 import { z } from 'zod'
 import type { Config } from '.'
-import { ArgusPeekError, type ArgusService } from './service'
+import { isArgusPeekError } from './errors'
+
+export const inject = ['argus', 'chatluna', 'chatluna_storage']
 
 const peekScreenSchema = z.object({
     client: z
@@ -34,11 +35,7 @@ const peekScreenSchema = z.object({
         )
 })
 
-export function applyChatLunaTools(
-    ctx: Context,
-    config: Config,
-    service: ArgusService
-) {
+export function apply(ctx: Context, config: Config) {
     const listScreensTool = tool(
         async (
             _input: Record<string, never>,
@@ -52,7 +49,7 @@ export function applyChatLunaTools(
                 if (denied) return denied
 
                 return JSON.stringify({
-                    clients: service.listClients().map((client) => ({
+                    clients: ctx.argus.listClients().map((client) => ({
                         name: client.name,
                         defaultDisplay: client.defaultDisplay,
                         displays: client.displays.map((display) => ({
@@ -92,7 +89,7 @@ If the target client is absent, report that the person is offline and do not cap
                 )
                 if (denied) return [denied, []] as const
 
-                const result = await service.peek(input.client, {
+                const result = await ctx.argus.peek(input.client, {
                     display: input.display,
                     blur: config.chatLunaToolBlur,
                     force: input.force
@@ -151,68 +148,56 @@ For the current request, call argus_list_screens first and use the exact client 
 The client must match the person requested by the user; never substitute another online client.
 Omit display only to use that client's default display.
 Use force only when the user explicitly requests a fresh screenshot.
-A successful call always returns the screenshot URL. When the current model supports image input, the screenshot is also attached as image content you can inspect directly; otherwise, call read_files with the returned URL to inspect the image before answering the user.`,
+A successful call always returns the screenshot URL.
+When the current model supports image input, the screenshot is also attached as image content you can inspect directly.
+Otherwise, call read_files with the returned URL to inspect the image before answering the user.`,
             responseFormat: 'content_and_artifact',
             schema: peekScreenSchema
         }
     )
 
-    ctx.effect(() =>
-        ctx.chatluna.platform.registerTool(listScreensTool.name, {
-            description: listScreensTool.description,
-            selector() {
-                return true
-            },
-            meta: {
-                source: 'extension',
-                group: 'argus',
-                tags: ['argus', 'remote-screen', 'discovery'],
-                defaultAvailability: {
-                    enabled: true,
-                    main: true,
-                    chatluna: true,
-                    characterScope: 'all'
+    for (const [registeredTool, tag] of [
+        [listScreensTool, 'discovery'],
+        [peekScreenTool, 'screenshot']
+    ] as const) {
+        ctx.effect(() =>
+            ctx.chatluna.platform.registerTool(registeredTool.name, {
+                description: registeredTool.description,
+                selector() {
+                    return true
+                },
+                meta: {
+                    source: 'extension',
+                    group: 'argus',
+                    tags: ['argus', 'remote-screen', tag],
+                    defaultAvailability: {
+                        enabled: true,
+                        main: true,
+                        chatluna: true,
+                        characterScope: 'all'
+                    }
+                },
+                createTool() {
+                    return registeredTool
                 }
-            },
-            createTool() {
-                return listScreensTool
-            }
-        })
-    )
-
-    ctx.effect(() =>
-        ctx.chatluna.platform.registerTool(peekScreenTool.name, {
-            description: peekScreenTool.description,
-            selector() {
-                return true
-            },
-            meta: {
-                source: 'extension',
-                group: 'argus',
-                tags: ['argus', 'remote-screen', 'screenshot'],
-                defaultAvailability: {
-                    enabled: true,
-                    main: true,
-                    chatluna: true,
-                    characterScope: 'all'
-                }
-            },
-            createTool() {
-                return peekScreenTool
-            }
-        })
-    )
+            })
+        )
+    }
 }
 
 async function checkAuthority(session: Session, requiredAuthority: number) {
     const user = await session.getUser(session.userId, ['authority'])
-    if ((user?.authority ?? 0) < requiredAuthority) {
+    if (
+        !user ||
+        typeof user.authority !== 'number' ||
+        user.authority < requiredAuthority
+    ) {
         return `Permission denied: authority ${requiredAuthority} is required.`
     }
 }
 
 function formatToolError(error: unknown): string {
-    if (!(error instanceof ArgusPeekError)) {
+    if (!isArgusPeekError(error)) {
         const message = error instanceof Error ? error.message : String(error)
         return `Failed to capture or publish screenshot: ${message}`
     }

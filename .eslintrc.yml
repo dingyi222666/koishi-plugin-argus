@@ -9,7 +9,6 @@ settings:
 env:
     browser: true
     node: true
-    mocha: true
     es2022: true
 
 globals:
@@ -28,7 +27,7 @@ rules:
     prettier/prettier:
         - error
         - printWidth: 80
-        - tabWidth: 4
+          tabWidth: 4
 
     array-callback-return: off
 

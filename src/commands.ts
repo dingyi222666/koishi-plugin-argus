@@ -1,41 +1,37 @@
-import { Context, h } from 'koishi'
+import { Context, h, type Session } from 'koishi'
 import type { Config } from '.'
-import { ArgusPeekError, type ArgusService } from './service'
-import type { ArgusPeekResult } from './types'
+import { ArgusPeekError } from './errors'
+import type { ArgusClientInfo, ArgusPeekResult } from './types'
 
-interface CommandOptions {
-    display?: number
-    blur?: number
-    list?: boolean
-    force?: boolean
-}
+export const inject = ['argus']
 
-export function applyCommands(
-    ctx: Context,
-    service: ArgusService,
-    config: Config
-) {
-    const cmd = ctx
-        .command(`${config.commandName} [name:string]`, {
-            authority: config.authority
-        })
+export function apply(ctx: Context, config: Config) {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    ctx.i18n.define('zh-CN', require('./locales/zh-CN.yml'))
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    ctx.i18n.define('en-US', require('./locales/en-US.yml'))
+
+    ctx.command(`${config.commandName} [name:string]`, {
+        authority: config.authority
+    })
         .option('display', '-d <id:number>')
         .option('blur', '-b <radius:number>')
         .option('list', '-l, --list')
         .option('force', '-f, --force', { authority: config.forceAuthority })
         .action(async ({ session, options }, name) => {
             if (!session) return
-            const opts = options as CommandOptions
-
-            if (opts.list) {
-                return formatClientList(service, session)
+            if (options.list) {
+                return formatClientList(ctx.argus.listClients(), session)
             }
 
             try {
-                const result = await service.peek(name, {
-                    display: opts.display,
-                    blur: clamp(opts.blur ?? config.blur, config.minBlur, 200),
-                    force: opts.force
+                const result = await ctx.argus.peek(name, {
+                    display: options.display,
+                    blur: Math.max(
+                        config.minBlur,
+                        Math.min(200, options.blur ?? config.blur)
+                    ),
+                    force: options.force
                 })
                 return formatPeekResult(session, result)
             } catch (error) {
@@ -62,16 +58,11 @@ export function applyCommands(
                 })
                 .action(async ({ session, options }) => {
                     if (!session) return
-                    const opts = options as CommandOptions
-                    const parts = [config.commandName, name]
-                    if (opts.display !== undefined) {
-                        parts.push('-d', String(opts.display))
-                    }
-                    if (opts.blur !== undefined) {
-                        parts.push('-b', String(opts.blur))
-                    }
-                    if (opts.force) parts.push('-f')
-                    return await session.execute(parts.join(' '))
+                    return session.execute({
+                        name: config.commandName,
+                        args: [name],
+                        options
+                    })
                 })
 
             disposers.set(name, () => sub.dispose())
@@ -85,7 +76,7 @@ export function applyCommands(
             }
         }
 
-        for (const client of service.listClients()) register(client.name)
+        for (const client of ctx.argus.listClients()) register(client.name)
 
         ctx.on('argus/client-connect', register)
         ctx.on('argus/client-disconnect', unregister)
@@ -95,15 +86,9 @@ export function applyCommands(
             disposers.clear()
         })
     }
-
-    return cmd
 }
 
-function formatClientList(
-    service: ArgusService,
-    session: { text: (key: string, args?: unknown[]) => string }
-) {
-    const clients = service.listClients()
+function formatClientList(clients: ArgusClientInfo[], session: Session) {
     if (clients.length === 0) return session.text('.no-clients')
     const lines = clients.map((c) => {
         const displays = c.displays.length
@@ -124,10 +109,7 @@ function formatClientList(
     )
 }
 
-function formatPeekResult(
-    session: { text: (key: string, args?: unknown[]) => string },
-    result: ArgusPeekResult
-) {
+function formatPeekResult(session: Session, result: ArgusPeekResult) {
     if (result.kind === 'busy') {
         return formatBusy(session, result.client, result.busy, result.expiresAt)
     }
@@ -138,7 +120,7 @@ function formatPeekResult(
 }
 
 function formatPeekError(
-    session: { text: (key: string, args?: unknown[]) => string },
+    session: Session,
     error: unknown,
     requestedName?: string
 ) {
@@ -174,9 +156,7 @@ function formatPeekError(
 }
 
 function formatBusy(
-    session: {
-        text: (key: string, args?: unknown[]) => string
-    },
+    session: Session,
     clientName: string,
     busy: { app?: string; title?: string; reason?: string },
     expiresAt?: number
@@ -187,10 +167,7 @@ function formatBusy(
     return message + ' ' + formatCacheNote(session, expiresAt)
 }
 
-function formatCacheNote(
-    session: { text: (key: string, args?: unknown[]) => string },
-    expiresAt: number
-) {
+function formatCacheNote(session: Session, expiresAt: number) {
     return session.text('.cache-note', [
         formatRemaining(expiresAt - Date.now())
     ])
@@ -198,10 +175,6 @@ function formatCacheNote(
 
 function isSafeAlias(name: string) {
     return /^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(name)
-}
-
-function clamp(value: number, min: number, max: number) {
-    return Math.max(min, Math.min(max, value))
 }
 
 function formatRemaining(ms: number) {

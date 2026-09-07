@@ -11,8 +11,6 @@
   name: yakumo-esbuild
 - id: xrx8ri
   name: yakumo-tsc
-- id: uj6mqw
-  name: yakumo-mocha
 - id: 43we4r
   name: yakumo/prepare
 - id: b7kw1g

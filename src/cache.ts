@@ -1,74 +1,63 @@
-import type { PeekBusyFrame } from './types'
-
-/**
- * 缓存一次 peek 的响应（图片 buffer 或 busy 状态）。
- * 在 cacheDuration 内对同一 (client, display, blur) 的调用直接复用。
- */
-export interface CachedPeek {
-    cachedAt: number
-    expiresAt: number
-    image?: Buffer
-    busy?: PeekBusyFrame
-}
+import type { Context, Disposable } from 'koishi'
+import type { ArgusPeekResult } from './types'
 
 export class PeekCache {
-    private store = new Map<string, CachedPeek>()
-    private timers = new Map<string, NodeJS.Timeout>()
+    private clients = new Map<string, Map<string, CacheEntry>>()
 
-    constructor(private duration: number) {}
+    constructor(
+        private ctx: Context,
+        private duration: number
+    ) {}
 
-    /** key 包含 client、display 的类型与值、blur。 */
-    static key(
+    get(client: string, display: number | string | undefined, blur: number) {
+        const entries = this.clients.get(client)
+        const key = JSON.stringify([display ?? null, blur])
+        const entry = entries?.get(key)
+        if (!entry) return
+        if (Date.now() < entry.result.expiresAt) return entry.result
+        this.delete(client, key)
+    }
+
+    set(
         client: string,
         display: number | string | undefined,
-        blur: number
+        blur: number,
+        result: ArgusPeekResult
     ) {
-        return JSON.stringify([client, display ?? null, blur])
-    }
-
-    get(key: string): CachedPeek | undefined {
-        const entry = this.store.get(key)
-        if (!entry) return undefined
-        if (Date.now() >= entry.expiresAt) {
-            this.delete(key)
-            return undefined
-        }
-        return entry
-    }
-
-    set(key: string, entry: Omit<CachedPeek, 'cachedAt' | 'expiresAt'>) {
         if (this.duration <= 0) return
-        this.delete(key)
-        const cachedAt = Date.now()
-        const cached: CachedPeek = {
-            ...entry,
-            cachedAt,
-            expiresAt: cachedAt + this.duration
-        }
-        this.store.set(key, cached)
-        const timer = setTimeout(() => this.delete(key), this.duration)
-        this.timers.set(key, timer)
-    }
-
-    delete(key: string) {
-        this.store.delete(key)
-        const timer = this.timers.get(key)
-        if (timer) {
-            clearTimeout(timer)
-            this.timers.delete(key)
-        }
+        const key = JSON.stringify([display ?? null, blur])
+        this.delete(client, key)
+        let entries = this.clients.get(client)
+        if (!entries) this.clients.set(client, (entries = new Map()))
+        entries.set(key, {
+            result: { ...result, expiresAt: Date.now() + this.duration },
+            dispose: this.ctx.setTimeout(
+                () => this.delete(client, key),
+                this.duration
+            )
+        })
     }
 
     deleteClient(client: string) {
-        const prefix = `[${JSON.stringify(client)},`
-        for (const key of this.store.keys()) {
-            if (key.startsWith(prefix)) this.delete(key)
-        }
+        const entries = this.clients.get(client)
+        if (!entries) return
+        for (const entry of entries.values()) entry.dispose()
+        this.clients.delete(client)
     }
 
     clear() {
-        for (const timer of this.timers.values()) clearTimeout(timer)
-        this.timers.clear()
-        this.store.clear()
+        for (const client of this.clients.keys()) this.deleteClient(client)
     }
+
+    private delete(client: string, key: string) {
+        const entries = this.clients.get(client)
+        entries?.get(key)?.dispose()
+        entries?.delete(key)
+        if (!entries?.size) this.clients.delete(client)
+    }
+}
+
+interface CacheEntry {
+    result: ArgusPeekResult & { expiresAt: number }
+    dispose: Disposable
 }

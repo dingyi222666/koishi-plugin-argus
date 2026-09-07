@@ -1,8 +1,4 @@
-import {
-    PhotonImage,
-    resize,
-    SamplingFilter
-} from '@cf-wasm/photon/node'
+import { PhotonImage, resize, SamplingFilter } from '@cf-wasm/photon/node'
 
 export interface CompressOptions {
     /** 目标体积上限（字节）。 */

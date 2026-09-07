@@ -1,9 +1,6 @@
 // WebSocket 协议帧类型与运行时类型定义。
 // 客户端 / 服务端共用此协议，注意保持向后兼容。
 
-import type { WebSocket } from 'ws'
-import type { BlurMode } from './blur'
-
 export interface DisplayInfo {
     id: number | string
     name?: string
@@ -104,46 +101,6 @@ export type ClientFrame =
 
 export type ServerFrame =
     HelloAckFrame | PeekRequestFrame | PingFrame | PongFrame
-
-export interface ArgusConfig {
-    path: string
-    token: string
-    commandName: string
-    blur: number
-    blurMode: BlurMode
-    minBlur: number
-    maxImageKB: number
-    finalMaxKB: number
-    timeout: number
-    cacheDuration: number
-    registerAlias: boolean
-    enableChatLunaTool: boolean
-    chatLunaToolBlur: number
-    authority: number
-    forceAuthority: number
-}
-
-export interface PendingPeek {
-    resolve: (response: PeekResponse) => void
-    reject: (error: Error) => void
-    timer: NodeJS.Timeout
-}
-
-export type PeekResponse =
-    | { kind: 'image'; frame: PeekResultFrame }
-    | { kind: 'busy'; frame: PeekBusyFrame }
-
-export interface ArgusClient {
-    name: string
-    socket: WebSocket
-    version?: string
-    displays: DisplayInfo[]
-    defaultDisplay?: number | string
-    connectedAt: number
-    pending: Map<string, PendingPeek>
-    lastSeen: number
-    heartbeatTimer?: NodeJS.Timeout
-}
 
 export interface ArgusClientInfo {
     name: string
